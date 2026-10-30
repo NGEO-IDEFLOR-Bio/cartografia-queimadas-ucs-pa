@@ -27,26 +27,53 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
 
 ---
 
-## 2. Hierarquia Cartográfica em 3 Escalas
+## 2. Arquitetura e Fluxo do Pipeline
 
-A prancha obedece à especificação oficial do **Núcleo de Geotecnologias (NGEO/IDEFLOR-Bio)**:
+O pipeline opera de forma contínua em 4 estágios integrados, garantindo reprodutibilidade e conformidade cartográfica:
 
 ```mermaid
-flowchart TD
-    subgraph MACRO["1. Localização Macro (Inferior Direito - 102 x 75 mm)"]
-        M1["Estado do Pará em Destaque (#D5F5E3 / #1E8449)<br/>• Estados e Países vizinhos<br/>• Posição geográfica da UC com marcador e halo circular<br/>• Grade uniforme de 4.0°"]
+flowchart LR
+    subgraph INGRESSO["1. Ingestão de Dados e Parâmetros"]
+        direction TB
+        IN_GEE["Google Earth Engine<br/>• Sentinel-2 Harmonized (COPERNICUS/S2_SR_HARMONIZED)<br/>• Máscara de Nuvens (SCL + QA60) e Brilho (B2 < 2000)"]
+        IN_BDQ["BDQueimadas / INPE<br/>• Focos de calor e incêndio via Asset GEE ou API<br/>• Atributos de data, satélite e coordenadas"]
+        IN_GEO["Bases Oficiais IDEFLOR-Bio<br/>• Limites homologados das UCs Estaduais<br/>• Malha municipal e contexto estadual"]
     end
 
-    subgraph INTERMEDIARIO["2. Localização Intermediária (Superior Direito - 102 x 75 mm)"]
-        I1["Contexto Regional da UC<br/>• Limite integral da UC em verde florestal (#D4EFDF / #1E8449)<br/>• Malha municipal e limites vizinhos<br/>• Distribuição dos focos na escala da unidade"]
+    subgraph ENGINE["2. Pipeline de Processamento (src/)"]
+        direction TB
+        P_TEMP["Classificação Temporal de Focos<br/>• Dias anteriores: Amarelo (#FAFF39) / Bronze (#B35C15)<br/>• Dia atual / Última obs.: Vermelho (#DB1E2A) / Bordô (#801119)"]
+        P_SPEC["Cálculo Espectral e Mosaicos<br/>• Composição mediana livre de nuvens<br/>• NBR: Índice Normalizado de Severidade (B8 - B12)/(B8 + B12)<br/>• Extensão dinâmica cobrindo 100% do viewport (Aspect Ratio 1.25)"]
     end
 
-    subgraph DETALHE["3. Mapa Principal de Detalhe (Esquerda - 155 x 124 mm)"]
-        D1["Enquadramento Focado no Alvo<br/>• Mosaico Sentinel-2 preenchendo 100% da área útil<br/>• Simbologia triangular bicolor para focos (dias anteriores vs atual)<br/>• Grade com rótulos no eixo Y rotacionados a 90°<br/>• Molduras no topo (zorder=100)"]
+    subgraph LAYOUT["3. Motor Cartográfico A4 Paisagem (297 x 210 mm)"]
+        direction TB
+        L_DET["Mapa Principal de Detalhe (155 x 124 mm)<br/>• Enquadramento total do alvo sem bordas vazias<br/>• Focos em triângulos bicolores com grade a 90°"]
+        L_INT["Mapa Intermediário (102 x 75 mm)<br/>• Contexto regional da UC e malha municipal"]
+        L_MAC["Mapa Macro Estadual (102 x 75 mm)<br/>• Pará no contexto nacional com halo na UC"]
+        L_TEC["Painéis Técnicos e Oficiais<br/>• Legenda oficial, Rosa dos Ventos, Escala gráfica<br/>• Logos NGEO, IDEFLOR-Bio e Brasão do Pará"]
     end
 
-    MACRO --> INTERMEDIARIO
-    INTERMEDIARIO --> DETALHE
+    subgraph OUTPUTS["4. Entregáveis em Alta Resolução"]
+        direction TB
+        OUT_FC["Prancha Falsa Cor (SWIR-NIR-Red)<br/>• PNG 300 DPI + PDF Vetorial"]
+        OUT_CN["Prancha Cor Natural (RGB)<br/>• PNG 300 DPI + PDF Vetorial"]
+        OUT_NBR["Prancha Severidade NBR<br/>• PNG 300 DPI + PDF Vetorial"]
+    end
+
+    INGRESSO --> ENGINE
+    ENGINE --> LAYOUT
+    LAYOUT --> OUTPUTS
+
+    classDef ing fill:#EBF5FB,stroke:#2980B9,stroke-width:1.5px,color:#1B4F72;
+    classDef eng fill:#FEF9E7,stroke:#D4AC0D,stroke-width:1.5px,color:#7D6608;
+    classDef lay fill:#EAFAF1,stroke:#27AE60,stroke-width:1.5px,color:#145A32;
+    classDef out fill:#FDEDEC,stroke:#E74C3C,stroke-width:1.5px,color:#78281F;
+
+    class IN_GEE,IN_BDQ,IN_GEO ing;
+    class P_TEMP,P_SPEC eng;
+    class L_DET,L_INT,L_MAC,L_TEC lay;
+    class OUT_FC,OUT_CN,OUT_NBR out;
 ```
 
 ---
@@ -90,7 +117,7 @@ cartografia-queimadas-ucs-pa/
 
 ```bash
 # 1. Clonar o repositório
-git clone https://github.com/samuel-ngeo/cartografia-queimadas-ucs-pa.git
+git clone https://github.com/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa.git
 cd cartografia-queimadas-ucs-pa
 
 # 2. Criar e ativar ambiente virtual
