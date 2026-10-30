@@ -29,10 +29,11 @@ FILE_MUNICIPIOS = PROCESSED_DIR / "municipios.geojson"
 FILE_BRASIL_UFS = PROCESSED_DIR / "brasil_ufs_simplificado.geojson"
 FILE_AMERICA_SUL = PROCESSED_DIR / "america_do_sul_simplificado.geojson"
 
-# Logotipos Institucionais
+# Logotipos e Templates Institucionais
 FILE_BRASAO_PARA = IMG_DIR / "brasao-para.png"
 FILE_LOGO_IDEFLOR = IMG_DIR / "logo-ideflor-bio.png"
 FILE_LOGO_NGEO = IMG_DIR / "logo-ngeo.png"
+FILE_TEMPLATE_RELATORIO = ASSETS_DIR / "templates" / "relatorio.docx"
 
 # Sistemas de Referência Espacial (CRS)
 CRS_GEOGRAFICO = "EPSG:4674"      # SIRGAS 2000 Geográfico

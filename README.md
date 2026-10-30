@@ -25,10 +25,35 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
   3. **NBR (Normalized Burn Ratio):** Índice espectral normalizado $\frac{\text{B8} - \text{B12}}{\text{B8} + \text{B12}}$ mapeando severidade do fogo.
 * **Cobertura Orbital de 100% da Área Visível:** O cálculo da extensão do mosaico Sentinel-2 expande e ajusta o *bounding box* ao *aspect ratio* exato do quadro do mapa principal ($155 \times 124\text{ mm}$), garantindo que a imagem preencha todo o viewport sem lacunas ou bordas pretas.
 * **Pranchas em Alta Resolução (300 DPI):** Exportação direta em formato raster (PNG 300 DPI) para relatórios e vetorial (PDF) para anexação em processos administrativos (PAe/SEI).
+* **Geração Automática de Relatório Técnico Oficial (.docx):** Produção instantânea do documento Word oficial no padrão institucional do NGEO/IDEFLOR-Bio, integrando tabelas quantitativas de focos, sensores orbitais, fundamentação metodológica e subsídios táticos para pronta tomada de decisão ambiental e fiscalização.
 
 ---
 
-## 2. Arquitetura e Fluxo do Pipeline
+## 2. Pranchas Cartográficas Oficiais Geradas (Exemplo: RDS Vitória de Souzel)
+
+Demonstração dos 3 produtos cartográficos gerados automaticamente pelo pipeline em alta resolução (300 DPI), em conformidade estrita com o padrão institucional do **NGEO/IDEFLOR-Bio**:
+
+### A) Severidade do Fogo — NBR (Normalized Burn Ratio)
+Com escala espectral calibrada para identificação de cicatrizes recentes e máscara hídrica institucional preservando rios e canais em azul profundo (`#1F618D`):
+<p align="center">
+  <img src="docs/img/prancha_severidade_nbr.png" width="95%" alt="Prancha Severidade NBR - RDS Vitória de Souzel" />
+</p>
+
+### B) Falsa Cor — Realce de Queimadas (SWIR-NIR-Red: B12, B8, B4)
+Destaque para o contraste nítido entre frentes de queima ativa / solo calcinado e vegetação úmida preservada:
+<p align="center">
+  <img src="docs/img/prancha_falsa_cor.png" width="95%" alt="Prancha Falsa Cor - RDS Vitória de Souzel" />
+</p>
+
+### C) Cor Natural — Visão de Superfície (RGB: B4, B3, B2)
+Contexto fidedigno da cobertura do solo, relevo e hidrografia do Rio Xingu:
+<p align="center">
+  <img src="docs/img/prancha_cor_natural.png" width="95%" alt="Prancha Cor Natural - RDS Vitória de Souzel" />
+</p>
+
+---
+
+## 3. Arquitetura e Fluxo do Pipeline
 
 O pipeline opera de forma contínua em 4 estágios integrados, garantindo reprodutibilidade e conformidade cartográfica:
 
@@ -79,7 +104,7 @@ flowchart LR
 
 ---
 
-## 3. Estrutura do Repositório
+## 4. Estrutura do Repositório
 
 ```text
 cartografia-queimadas-ucs-pa/
@@ -87,17 +112,21 @@ cartografia-queimadas-ucs-pa/
 │   ├── raw/                 # Dados brutos baixados (focos BDQueimadas, CSVs)
 │   └── processed/           # Camadas oficiais (UCs Estaduais, Pará, Municípios, Brasil)
 ├── assets/
-│   └── img/                 # Logomarcas oficiais (Brasão PA, IDEFLOR-Bio, NGEO)
+│   ├── img/                 # Logomarcas oficiais (Brasão PA, IDEFLOR-Bio, NGEO)
+│   └── templates/           # Template oficial Word (.docx) com cabeçalho institucional
+├── docs/
+│   └── img/                 # Pranchas em alta resolução para documentação
 ├── src/
 │   ├── __init__.py
 │   ├── config.py            # CRS, cores hexadecimais, layout milimétrico e parâmetros orbitais
 │   ├── gee_pipeline.py      # Autenticação GEE, máscaras Sentinel-2 e cálculo dinâmico de extensão
 │   ├── bdqueimadas.py       # Ingestão de focos, filtro espacial por UC e segregação temporal
 │   ├── layout_engine.py     # Motor de renderização A4 Paisagem (297x210 mm) em Python puro
-│   └── exporter.py          # Gerador das 3 pranchas (Falsa Cor, Cor Natural, NBR) em PNG e PDF
+│   ├── report_generator.py  # Gerador automatizado de Relatório Técnico (.docx) para decisão rápida
+│   └── exporter.py          # Orquestrador das 3 pranchas (PNG/PDF) e do Relatório Técnico (.docx)
 ├── notebooks/
 │   └── colab_runner.ipynb   # Notebook orquestrador enxuto para execução no Google Colab
-├── outputs/                 # Pranchas geradas em PNG 300 DPI e PDF
+├── outputs/                 # Pranchas geradas em PNG 300 DPI, PDFs e Relatório Técnico (.docx)
 ├── diretriz.md              # Diretrizes de projeto e regras técnicas de engenharia
 ├── layout_elements.json     # Medidas milimétricas dos elementos QGIS
 ├── requirements.txt         # Dependências do projeto
@@ -106,13 +135,13 @@ cartografia-queimadas-ucs-pa/
 
 ---
 
-## 4. Guia Rápido de Execução
+## 5. Guia Rápido de Execução
 
 ### Opção A: Execução no Google Colab (Recomendada)
 1. Clique no botão [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb) para abrir o notebook diretamente no Google Colab.
 2. Na célula de autenticação GEE, confirme o ID do projeto Google Cloud (padrão: `ee-samuelsantosambientalcourse`, alterando caso utilize outra conta/projeto) e execute a autenticação interativa.
-3. Escolha a Unidade de Conservação desejada (ex: `Área de Proteção Ambiental do Marajó`) — o período analisa automaticamente os últimos 30 dias até hoje — e execute em 1 clique.
-4. Visualize as 3 pranchas geradas diretamente no navegador e baixe os PDFs.
+3. Escolha a Unidade de Conservação desejada (ex: `Reserva de Desenvolvimento Sustentável Vitória de Souzel`) — o período analisa automaticamente os últimos 30 dias até hoje — e execute em 1 clique.
+4. Visualize as 3 pranchas geradas diretamente no navegador e baixe os PDFs e o Relatório Técnico Word (`.docx`).
 
 ### Opção B: Execução Local em Python
 
@@ -138,28 +167,27 @@ from src.exporter import processar_e_exportar_todos_os_mapas
 
 init_gee()
 processar_e_exportar_todos_os_mapas(
-    nome_uc='APA Marajó',
-    data_inicio='2025-08-01',
-    data_fim='2025-12-31',
-    focos_source='projects/ee-samuelsantosambientalcourse/assets/bdqueimadas_2025-08-01_2025-12-31'
+    nome_uc='Reserva de Desenvolvimento Sustentável Vitória de Souzel'
 )
 "
 ```
 
 ---
 
-## 5. Convenção das Cores de Simbologia
+## 6. Convenção das Cores de Simbologia
 
 | Elemento | Preenchimento (Fill) | Contorno (Stroke) | Geometria / Marker | Significado |
 | :--- | :---: | :---: | :---: | :--- |
 | **Focos Dias Anteriores** | `#FAFF39` | `#B35C15` | Triângulo `▲` (70 pt) | Acúmulo histórico de queimadas no período |
 | **Focos Dia Atual / Última Obs.** | `#DB1E2A` | `#801119` | Triângulo `▲` (95 pt) | Frentes ativas de fogo / emergência recente |
 | **Limite da UC** | Transparente | `#00FF66` / `#004D20` | Polígono contínuo | Limite homologado DGMUC/IDEFLOR-Bio |
+| **Severidade do Fogo (NBR)** | Gradiente Contínuo | `#2C3E50` | Paleta Calibrada | Risco foliar e intensidade térmica |
+| **Corpos d'Água (NBR)** | `#1F618D` | `#1B4F72` | Máscara NDWI / SCL | Rios e lagos preservados |
 
 ---
 
-## 6. Autoria e Licença
+## 7. Autoria e Licença
 
-* **Desenvolvimento:** Núcleo de Geotecnologias (NGEO / IDEFLOR-Bio).
-* **Datum e Projeção:** SIRGAS 2000 (EPSG:4674).
+* **Elaboração e Responsabilidade Técnica:** Samuel da Costa dos Santos – Coordenador do Núcleo de Geotecnologias (NGEO / IDEFLOR-Bio).
+* **Datum e Projeção:** SIRGAS 2000 (EPSG:4674) / Projeção Cartográfica Geográfica.
 * **Licença:** MIT.
