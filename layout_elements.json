@@ -206,7 +206,7 @@
                 "height_mm": 13.435
             },
             "properties": {
-                "picture_path": "C:/PROGRA~1/QGIS42~1.3/apps/qgis/svg/arrows/Arrow_05.svg",
+                "picture_path": "assets/img/arrow.svg",
                 "resize_mode": 0
             }
         },
@@ -286,7 +286,7 @@
                 "height_mm": 15.279
             },
             "properties": {
-                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/dda75f98-a793-44ca-a966-bcc1585eb271.png",
+                "picture_path": "assets/img/logo-ngeo.png",
                 "resize_mode": 0
             }
         },
@@ -324,7 +324,7 @@
                 "height_mm": 14.56
             },
             "properties": {
-                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/Logomarca_Ideflor-bio.png",
+                "picture_path": "assets/img/logo-ideflor-bio.png",
                 "resize_mode": 0
             }
         },
@@ -340,7 +340,7 @@
                 "height_mm": 15.087
             },
             "properties": {
-                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/goveno-do-para-logo-png_seeklogo-507507.png",
+                "picture_path": "assets/img/brasao-para.png",
                 "resize_mode": 0
             }
         }
