@@ -109,7 +109,7 @@ cartografia-queimadas-ucs-pa/
 
 ### Opção A: Execução no Google Colab (Recomendada)
 1. Clique no botão [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb) para abrir o notebook diretamente no Google Colab.
-2. Execute a célula de autenticação GEE (`ee.Authenticate()` / `ee.Initialize()`).
+2. Na célula de autenticação GEE, confirme o ID do projeto Google Cloud (padrão: `ee-samuelsantosambientalcourse`, alterando caso utilize outra conta/projeto) e execute a autenticação interativa.
 3. Escolha a Unidade de Conservação (ex: `APA Marajó`), o intervalo de datas e execute.
 4. Visualize as 3 pranchas geradas diretamente no navegador e baixe os PDFs.
 

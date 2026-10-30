@@ -15,10 +15,10 @@ import numpy as np
 from PIL import Image
 
 import ee
-from src.config import GEE_S2_COLLECTION, VIS_CONFIGS
+from src.config import GEE_S2_COLLECTION, DEFAULT_GEE_PROJECT, VIS_CONFIGS
 
 
-def init_gee(project_id: Optional[str] = None) -> bool:
+def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
     """
     Inicializa o Google Earth Engine de forma resiliente no ambiente local ou Google Colab.
     
@@ -26,24 +26,20 @@ def init_gee(project_id: Optional[str] = None) -> bool:
     ----------
     project_id : str, optional
         ID do projeto no Google Cloud Platform associado ao Earth Engine.
+        Padrão: 'ee-samuelsantosambientalcourse' (altere para o seu projeto institucional).
     """
+    target_project = project_id or DEFAULT_GEE_PROJECT
     try:
-        if project_id:
-            ee.Initialize(project=project_id)
-        else:
-            ee.Initialize()
-        print("✓ Google Earth Engine inicializado com sucesso.")
+        ee.Initialize(project=target_project)
+        print(f"✓ Google Earth Engine inicializado com sucesso no projeto: {target_project}")
         return True
     except Exception as e:
-        print(f"! Falha na inicialização direta do GEE: {e}")
-        print("Tentando autenticação interativa...")
+        print(f"! Falha na inicialização direta do GEE ({e}).")
+        print("Tentando autenticação interativa no ambiente...")
         try:
             ee.Authenticate()
-            if project_id:
-                ee.Initialize(project=project_id)
-            else:
-                ee.Initialize()
-            print("✓ GEE autenticado e inicializado com sucesso.")
+            ee.Initialize(project=target_project)
+            print(f"✓ GEE autenticado e inicializado com sucesso no projeto: {target_project}")
             return True
         except Exception as auth_err:
             print(f"✗ Erro definitivo ao autenticar GEE: {auth_err}")

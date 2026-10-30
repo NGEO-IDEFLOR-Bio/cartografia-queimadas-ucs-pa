@@ -51,6 +51,7 @@ FOCOS_RECENTES_LW = 1.6              # Espessura do traço
 
 # Parâmetros da Coleção Sentinel-2 Harmonized (Google Earth Engine)
 GEE_S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
+DEFAULT_GEE_PROJECT = "ee-samuelsantosambientalcourse"
 
 # Visualizações Orbitais
 VIS_CONFIGS = {
