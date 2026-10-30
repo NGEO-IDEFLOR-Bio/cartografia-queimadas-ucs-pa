@@ -14,6 +14,7 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
 
 ## 1. Destaques e Funcionalidades
 
+* **Download 100% Automático do BDQueimadas / INPE:** Elimina qualquer necessidade de baixar arquivos manualmente ou fazer upload de assets no Earth Engine. O pipeline se conecta diretamente ao dataserver oficial do INPE (`dataserver-coids.inpe.br`), baixando em segundos os focos diários ou mensais para o Estado do Pará, com cache local inteligente em `data/raw/`.
 * **Execução em Nuvem (Google Colab):** Todo o pipeline pode ser executado de qualquer lugar, a qualquer hora, para qualquer UC, através de um notebook leve orquestrador (`notebooks/colab_runner.ipynb`) com autenticação interativa nativa do GEE.
 * **Simbologia Padronizada dos Focos de Queimada:**
   - **Focos de Dias Anteriores:** Marcadores triangulares (`▲`) com preenchimento em amarelo vibrante (`#FAFF39`) e contorno bronze queimado (`#B35C15`).

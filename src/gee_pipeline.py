@@ -31,7 +31,7 @@ def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
     target_project = project_id or DEFAULT_GEE_PROJECT
     try:
         ee.Initialize(project=target_project)
-        print(f"✓ Google Earth Engine inicializado com sucesso no projeto: {target_project}")
+        print(f"[OK] Google Earth Engine inicializado com sucesso no projeto: {target_project}")
         return True
     except Exception as e:
         print(f"! Falha na inicialização direta do GEE ({e}).")
@@ -39,10 +39,10 @@ def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
         try:
             ee.Authenticate()
             ee.Initialize(project=target_project)
-            print(f"✓ GEE autenticado e inicializado com sucesso no projeto: {target_project}")
+            print(f"[OK] GEE autenticado e inicializado com sucesso no projeto: {target_project}")
             return True
         except Exception as auth_err:
-            print(f"✗ Erro definitivo ao autenticar GEE: {auth_err}")
+            print(f"[!] Erro definitivo ao autenticar GEE: {auth_err}")
             return False
 
 

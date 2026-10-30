@@ -25,6 +25,7 @@ from src.gee_pipeline import (
     fetch_rendered_basemap
 )
 from src.bdqueimadas import (
+    fetch_bdqueimadas_inpe,
     load_focos_from_gee,
     load_focos_from_file,
     classify_focos_by_date,
@@ -121,7 +122,7 @@ def processar_e_exportar_todos_os_mapas(
     nome_uc: str,
     data_inicio: str = "2025-08-01",
     data_fim: str = "2025-12-31",
-    focos_source: Union[str, Path, ee.FeatureCollection] = "projects/ee-samuelsantosambientalcourse/assets/bdqueimadas_2025-08-01_2025-12-31",
+    focos_source: Union[str, Path, ee.FeatureCollection] = "BDQUEIMADAS",
     data_referencia_foco: Optional[str] = None,
     buffer_uc_metros: float = 0.0,
     output_prefix: Optional[str] = None
@@ -132,9 +133,11 @@ def processar_e_exportar_todos_os_mapas(
     - Cor Natural
     - NBR
     
-    Returns
-    -------
-    dict com caminhos dos arquivos exportados, métricas dos focos e referências cartográficas.
+    Parameters
+    ----------
+    focos_source : Union[str, Path, ee.FeatureCollection]
+        'BDQUEIMADAS' (padrão): Baixa automaticamente os focos oficiais do INPE/BDQueimadas.
+        Ou caminho de arquivo local (.csv, .geojson, .shp) ou asset do GEE.
     """
     print(f"\n=======================================================")
     print(f" Início do Processamento de Focos: {nome_uc}")
@@ -147,7 +150,7 @@ def processar_e_exportar_todos_os_mapas(
     uc_real_name = gdf_uc[col_nome].iloc[0]
     uc_poly = gdf_uc.geometry.iloc[0]
     
-    print(f"✓ UC selecionada: {uc_real_name}")
+    print(f"[OK] UC selecionada: {uc_real_name}")
     
     # 2. Calcular Extensão Visível do Mapa Principal (Proporção 155 x 124 mm -> 1.25)
     bounds = gdf_uc.total_bounds  # xmin, ymin, xmax, ymax
@@ -156,32 +159,40 @@ def processar_e_exportar_todos_os_mapas(
         aspect_ratio=1.25,
         margin_pct=0.06
     )
-    print(f"✓ Extensão do viewport calculada: {vis_extent}")
+    print(f"[OK] Extensão do viewport calculada: {vis_extent}")
     
     # 3. Construir Mosaicos Sentinel-2 e NBR no GEE
-    print("⏳ Processando mosaicos Sentinel-2 Harmonized (mediana com máscara de nuvens/brilho)...")
+    print("[*] Processando mosaicos Sentinel-2 Harmonized (mediana com máscara de nuvens/brilho)...")
     s2_data = build_sentinel2_mosaics(vis_extent, data_inicio, data_fim)
     mosaico = s2_data["mosaico"]
     nbr = s2_data["nbr"]
     
     # 4. Ingestão e Classificação dos Focos de Queimada
-    print("⏳ Ingerindo e classificando focos de queimada...")
-    if isinstance(focos_source, str) and focos_source.startswith("projects/"):
+    print("[*] Ingerindo e classificando focos de queimada...")
+    is_bdqueimadas_auto = (
+        focos_source is None
+        or (isinstance(focos_source, str) and focos_source.upper() in ["BDQUEIMADAS", "INPE", "AUTO", "BD_QUEIMADAS"])
+    )
+    
+    if is_bdqueimadas_auto:
+        # Download 100% automático e inteligente do INPE BDQueimadas
+        gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
+    elif isinstance(focos_source, str) and focos_source.startswith("projects/"):
         gdf_focos = load_focos_from_gee(focos_source, filter_geometry=s2_data["geometry"])
     elif isinstance(focos_source, (str, Path)) and Path(focos_source).exists():
         gdf_focos = load_focos_from_file(focos_source)
     else:
-        # Tenta carregar do GEE caso seja string
+        # Fallback resiliente
         try:
             gdf_focos = load_focos_from_gee(str(focos_source), filter_geometry=s2_data["geometry"])
         except Exception:
-            gdf_focos = gpd.GeoDataFrame(columns=["geometry", "data_apenas"], crs=CRS_GEOGRAFICO)
+            gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
             
     # Filtro espacial no polígono da UC
     gdf_focos_uc = filter_focos_by_polygon(gdf_focos, uc_poly, buffer_meters=buffer_uc_metros)
     gdf_anteriores, gdf_recentes, metricas = classify_focos_by_date(gdf_focos_uc, data_referencia=data_referencia_foco)
     
-    print(f"✓ Total de focos na UC: {metricas['total']}")
+    print(f"[OK] Total de focos na UC: {metricas['total']}")
     print(f"  • Dia atual / Última obs. ({metricas['data_ultima_observacao']}): {metricas['recentes']}")
     print(f"  • Dias anteriores: {metricas['anteriores']}")
     
@@ -199,7 +210,7 @@ def processar_e_exportar_todos_os_mapas(
     ]
     
     for tipo_key, ee_layer, vis_spec in basemap_variants:
-        print(f"\n⏳ Renderizando basemap: {vis_spec['nome']}...")
+        print(f"\n[*] Renderizando basemap: {vis_spec['nome']}...")
         try:
             # Baixar imagem renderizada
             basemap_array = fetch_rendered_basemap(
@@ -237,7 +248,7 @@ def processar_e_exportar_todos_os_mapas(
             "titulo": vis_spec["nome"]
         }
         
-    print(f"\n✓ Sucesso! Todas as 3 pranchas foram geradas e salvas em: {OUTPUTS_DIR}")
+    print(f"\n[OK] Sucesso! Todas as 3 pranchas foram geradas e salvas em: {OUTPUTS_DIR}")
     return {
         "uc": uc_real_name,
         "metricas": metricas,

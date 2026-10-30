@@ -369,6 +369,6 @@ def render_mapa_prancha(
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=DPI_EXPORT, bbox_inches="tight", pad_inches=0.02)
-        print(f"✓ Prancha cartográfica salva: {output_path}")
+        print(f"[OK] Prancha cartográfica salva: {output_path}")
         
     return fig
