@@ -144,9 +144,14 @@ def build_sentinel2_mosaics(
     # Cálculo do Normalized Burn Ratio: (B8 - B12) / (B8 + B12)
     nbr = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
     
+    # Detecção refinada de corpos d'água (NDWI > 0 ou SCL == 6) para evitar coloração espúria de queimada na água
+    ndwi = mosaico.normalizedDifference(["B3", "B8"]).rename("NDWI")
+    is_water = ndwi.gt(0.0).Or(mosaico.select("SCL").round().eq(6))
+    
     return {
         "mosaico": mosaico,
         "nbr": nbr,
+        "water_mask": is_water,
         "extent": (xmin, ymin, xmax, ymax),
         "geometry": region,
         "collection": s2_col,
@@ -157,10 +162,12 @@ def fetch_rendered_basemap(
     image: ee.Image,
     extent_bbox: Tuple[float, float, float, float],
     vis_params: Dict[str, Any],
-    dimensions: Tuple[int, int] = (1280, 1024)
+    dimensions: Tuple[int, int] = (1280, 1024),
+    water_mask: Optional[ee.Image] = None
 ) -> np.ndarray:
     """
     Renderiza e baixa o basemap como array RGB NumPy pronto para plotagem no Matplotlib.
+    Se fornecida máscara de água, preserva rios e lagos com tonalidade azul hídrica.
     """
     xmin, ymin, xmax, ymax = extent_bbox
     region = ee.Geometry.Rectangle([xmin, ymin, xmax, ymax], proj="EPSG:4326", geodesic=False)
@@ -170,6 +177,11 @@ def fetch_rendered_basemap(
     clean_vis = {k: v for k, v in vis_params.items() if k in valid_vis_keys}
     
     vis_img = image.visualize(**clean_vis)
+    
+    if water_mask is not None:
+        # Azul hídrico institucional (#1F618D -> [31, 97, 141])
+        water_rgb = ee.Image.constant([31, 97, 141]).toByte()
+        vis_img = vis_img.where(water_mask.eq(1), water_rgb)
     
     url = vis_img.getThumbURL({
         "region": region,

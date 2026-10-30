@@ -23,7 +23,7 @@ from PIL import Image
 
 from src.config import (
     PAGE_WIDTH_MM, PAGE_HEIGHT_MM, DPI_EXPORT,
-    LAYOUT_ITEMS, mm_to_mpl_rect,
+    LAYOUT_ITEMS, mm_to_mpl_rect, calculate_visible_extent,
     FOCOS_ANTERIORES_FILL, FOCOS_ANTERIORES_STROKE, FOCOS_ANTERIORES_SIZE, FOCOS_ANTERIORES_LW,
     FOCOS_RECENTES_FILL, FOCOS_RECENTES_STROKE, FOCOS_RECENTES_SIZE, FOCOS_RECENTES_LW,
     FILE_UCS_ESTADUAIS, FILE_ESTADO_PA, FILE_MUNICIPIOS,
@@ -180,23 +180,28 @@ def render_mapa_prancha(
     fig.patches.extend([rect_out1, rect_out2])
     
     # 3. Faixa de Cabeçalho / Título Principal (txt_titulo)
+    # Caixa retangular contínua que cobre da extremidade esquerda à direita sobre os mapas
     t_rect = LAYOUT_ITEMS["titulo"]
     mpl_t = mm_to_mpl_rect(t_rect["x"], t_rect["y"], t_rect["w"], t_rect["h"])
     ax_titulo = fig.add_axes(mpl_t)
     ax_titulo.axis("off")
+    
+    rect_t_box = plt.Rectangle((0, 0), 1, 1, transform=ax_titulo.transAxes,
+                               fill=True, facecolor="#F8F9F9", edgecolor="#2C3E50", linewidth=1.0)
+    ax_titulo.add_patch(rect_t_box)
     
     short_uc_name = get_short_uc_name(nome_uc)
     titulo_mapa = f"MAPA DE MONITORAMENTO DE FOCOS DE CALOR E INCÊNDIO – {short_uc_name.upper()}"
     ax_titulo.text(
         0.5, 0.65, titulo_mapa,
         transform=ax_titulo.transAxes, ha="center", va="center",
-        fontsize=11.0, fontweight="bold", fontfamily="sans-serif", color="#111111"
+        fontsize=10.5, fontweight="bold", fontfamily="sans-serif", color="#1B2631"
     )
     subtitulo = f"Insumo Orbital: Sentinel-2 Harmonized ({tipo_basemap}) | BDQueimadas/INPE | Período: {periodo_str}"
     ax_titulo.text(
-        0.5, 0.22, subtitulo,
+        0.5, 0.25, subtitulo,
         transform=ax_titulo.transAxes, ha="center", va="center",
-        fontsize=7.2, fontfamily="sans-serif", color="#333333"
+        fontsize=7.0, fontfamily="sans-serif", color="#2C3E50"
     )
     
     # 4. Coluna Esquerda: Moldura Externa de Contenção (rec_mapa)
@@ -266,6 +271,41 @@ def render_mapa_prancha(
     
     ax_main.grid(True, linestyle="--", alpha=0.45, color="white", linewidth=0.6, zorder=25)
     
+    # 4.2. Legenda Cartográfica Flutuante de Severidade do Fogo (NBR)
+    if "nbr" in tipo_basemap.lower() or "severidade" in tipo_basemap.lower():
+        rec_nbr_leg = mpatches.FancyBboxPatch(
+            (0.68, 0.70), 0.305, 0.28,
+            boxstyle="square,pad=0.01",
+            transform=ax_main.transAxes,
+            facecolor="#FFFFFF", edgecolor="#2C3E50",
+            linewidth=0.8, alpha=0.92, zorder=50
+        )
+        ax_main.add_patch(rec_nbr_leg)
+        
+        ax_main.text(0.832, 0.958, "Severidade do Fogo (NBR)",
+                     transform=ax_main.transAxes, ha="center", va="top",
+                     fontsize=6.8, fontweight="bold", color="#1B2631", zorder=51)
+                     
+        nbr_classes = [
+            ("#7F0000", "Queimada Severa (< -0.15)"),
+            ("#F46D43", "Queimada Moderada (-0.15 a 0.05)"),
+            ("#FEE08B", "Solo / Baixa Veg. (0.05 a 0.25)"),
+            ("#1A9641", "Floresta Preservada (> 0.25)"),
+            ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
+        ]
+        y_swatch_start = 0.895
+        for i, (cor, label_cls) in enumerate(nbr_classes):
+            y_cls = y_swatch_start - (i * 0.040)
+            patch_cls = mpatches.Rectangle(
+                (0.695, y_cls - 0.013), 0.026, 0.026,
+                transform=ax_main.transAxes,
+                facecolor=cor, edgecolor="#333333", linewidth=0.5, zorder=51
+            )
+            ax_main.add_patch(patch_cls)
+            ax_main.text(0.732, y_cls, label_cls,
+                         transform=ax_main.transAxes, ha="left", va="center",
+                         fontsize=5.6, fontweight="semibold", color="#2C3E50", zorder=51)
+
     # Moldura no topo (zorder=100)
     for spine in ax_main.spines.values():
         spine.set_edgecolor("#111111")
@@ -308,14 +348,17 @@ def render_mapa_prancha(
             pass
             
     if not gdf_uc.empty:
-        gdf_uc.plot(ax=ax_interm, facecolor="#D4EFDF", edgecolor="#1E8449", linewidth=1.5, zorder=5)
-        
-        # Enquadramento proporcional com margem de 35%
+        # Enquadramento proporcional com aspect ratio fixo idêntico ao viewport (102.0 / 75.0 = 1.36)
         uc_bounds = gdf_uc.total_bounds
-        bw = uc_bounds[2] - uc_bounds[0]
-        bh = uc_bounds[3] - uc_bounds[1]
-        ax_interm.set_xlim(uc_bounds[0] - bw * 0.35, uc_bounds[2] + bw * 0.35)
-        ax_interm.set_ylim(uc_bounds[1] - bh * 0.35, uc_bounds[3] + bh * 0.35)
+        xmin_i, ymin_i, xmax_i, ymax_i = calculate_visible_extent(
+            uc_bounds[0], uc_bounds[1], uc_bounds[2], uc_bounds[3],
+            aspect_ratio=(102.0 / 75.0),
+            margin_pct=0.20
+        )
+        ax_interm.set_xlim(xmin_i, xmax_i)
+        ax_interm.set_ylim(ymin_i, ymax_i)
+        
+        gdf_uc.plot(ax=ax_interm, facecolor="#D4EFDF", edgecolor="#1E8449", linewidth=1.5, zorder=5)
         
         # Rótulo com nome da UC em verde florestal (garantido dentro da geometria)
         rep_pt = gdf_uc.to_crs(CRS_METRICO_PA).geometry.representative_point().to_crs(CRS_GEOGRAFICO).iloc[0]
@@ -336,7 +379,8 @@ def render_mapa_prancha(
         gdf_all_focos = gpd.GeoDataFrame(pd.concat([gdf_anteriores, gdf_recentes], ignore_index=True)) if (not gdf_anteriores.empty or not gdf_recentes.empty) else gpd.GeoDataFrame()
         if not gdf_all_focos.empty and len(gdf_all_focos) > 0:
             fc_c = gdf_all_focos.to_crs(CRS_METRICO_PA).geometry.centroid.to_crs(CRS_GEOGRAFICO).iloc[0]
-            # Caixa de chamada deslocada
+            bw = xmax_i - xmin_i
+            bh = ymax_i - ymin_i
             call_x = fc_c.x + bw * 0.20
             call_y = fc_c.y - bh * 0.12
             ax_interm.annotate(
@@ -348,8 +392,11 @@ def render_mapa_prancha(
                 zorder=25
             )
             
+    # Trava a geometria do eixo intermediário para dimensões físicas fixas (102 x 75 mm), sem estreitar pela UC
+    ax_interm.set_aspect('equal', adjustable='datalim')
+    
     # Ticks e coordenadas do mapa intermediário
-    ax_interm.tick_params(labelsize=6, direction="out", length=2.5)
+    ax_interm.tick_params(axis="both", which="both", labelsize=5.0, length=2.0, color="#2C3E50", pad=1.2)
     for tick in ax_interm.get_yticklabels():
         tick.set_rotation(90)
         tick.set_va("center")
@@ -359,9 +406,9 @@ def render_mapa_prancha(
         spine.set_linewidth(0.8)
         spine.set_zorder(100)
         
-    # 5.3. Título do Mapa Macro (Centralizado no espaço entre os mapas intermediário e macro)
+    # 5.3. Título do Mapa Macro (Centralizado com folga milimétrica exata: 2.7mm após ticks e 2.6mm antes do mapa)
     ax_painel.text(
-        0.5, 0.530, f"LOCALIZAÇÃO DA UNIDADE – {short_uc_name.upper()}",
+        0.5, 0.5094, f"LOCALIZAÇÃO DA UNIDADE – {short_uc_name.upper()}",
         transform=ax_painel.transAxes, ha="center", va="center",
         fontsize=7.5, fontweight="bold", fontfamily="sans-serif", color="#111111"
     )
@@ -440,6 +487,7 @@ def render_mapa_prancha(
         
     ax_macro.set_xlim(-62.5, -43.5)
     ax_macro.set_ylim(-12.0, 5.0)
+    ax_macro.set_aspect('equal', adjustable='datalim')
     
     # Grade de 4.0° uniforme no mapa macro
     ax_macro.xaxis.set_major_locator(MultipleLocator(4.0))

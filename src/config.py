@@ -6,6 +6,7 @@ e convenções de cores da simbologia dos focos e dos basemaps orbitais.
 """
 
 from pathlib import Path
+from typing import Tuple
 
 # Diretórios do Projeto
 SRC_DIR = Path(__file__).resolve().parent
@@ -74,9 +75,19 @@ VIS_CONFIGS = {
     "nbr": {
         "nome": "NBR (Severidade do Fogo)",
         "subtitulo": "Normalized Burn Ratio (B8 - B12) / (B8 + B12)",
-        "min": -0.20,
-        "max": 0.50,
-        "palette": ["#000000", "#db1e2a", "#ff8c00", "#ffff00", "#ffffff"],
+        "min": -0.30,
+        "max": 0.70,
+        "palette": [
+            "#7F0000",  # -0.30: Fogo de alta severidade / cicatriz profunda
+            "#D73027",  # -0.15: Queimada recente
+            "#F46D43",  # -0.05: Severidade moderada
+            "#FDAE61",  #  0.05: Queimada baixa / solo seco
+            "#FEE08B",  #  0.18: Solo exposto / transição
+            "#D9EF8B",  #  0.30: Vegetação esparsa / pastagem
+            "#A6D96A",  #  0.42: Vegetação moderada
+            "#1A9641",  #  0.55: Floresta conservada
+            "#004D20",  #  0.70: Floresta tropical densa
+        ],
     }
 }
 
@@ -94,6 +105,42 @@ def mm_to_mpl_rect(x_mm, y_mm, w_mm, h_mm, page_w=PAGE_WIDTH_MM, page_h=PAGE_HEI
     width = w_mm / page_w
     height = h_mm / page_h
     return [left, bottom, width, height]
+
+
+def calculate_visible_extent(
+    xmin: float, ymin: float, xmax: float, ymax: float,
+    aspect_ratio: float = 1.25,
+    margin_pct: float = 0.05
+) -> Tuple[float, float, float, float]:
+    """
+    Ajusta dinamicamente a extensão geográfica da área de interesse para coincidir
+    com a proporção exata da moldura do mapa (aspect_ratio = w / h).
+    """
+    w = xmax - xmin
+    h = ymax - ymin
+    
+    xmin -= w * margin_pct
+    xmax += w * margin_pct
+    ymin -= h * margin_pct
+    ymax += h * margin_pct
+    
+    w_curr = xmax - xmin
+    h_curr = ymax - ymin
+    
+    curr_ratio = w_curr / h_curr if h_curr != 0 else aspect_ratio
+    
+    if curr_ratio < aspect_ratio:
+        needed_w = h_curr * aspect_ratio
+        delta = (needed_w - w_curr) / 2.0
+        xmin -= delta
+        xmax += delta
+    else:
+        needed_h = w_curr / aspect_ratio
+        delta = (needed_h - h_curr) / 2.0
+        ymin -= delta
+        ymax += delta
+        
+    return (xmin, ymin, xmax, ymax)
 
 # Coordenadas extraídas de layout_elements.json
 LAYOUT_ITEMS = {

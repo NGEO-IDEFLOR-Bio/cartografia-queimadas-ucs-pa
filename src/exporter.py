@@ -221,9 +221,10 @@ def processar_e_exportar_todos_os_mapas(
     for tipo_key, ee_layer, vis_spec in basemap_variants:
         print(f"\n[*] Renderizando basemap: {vis_spec['nome']}...")
         try:
-            # Baixar imagem renderizada
+            # Baixar imagem renderizada (preservando corpos d'água no NBR)
+            w_mask = s2_data.get("water_mask") if tipo_key == "nbr" else None
             basemap_array = fetch_rendered_basemap(
-                ee_layer, vis_extent, vis_spec, dimensions=(1280, 1024)
+                ee_layer, vis_extent, vis_spec, dimensions=(1280, 1024), water_mask=w_mask
             )
         except Exception as e:
             print(f"! Erro ao obter basemap do GEE para {tipo_key}: {e}")
