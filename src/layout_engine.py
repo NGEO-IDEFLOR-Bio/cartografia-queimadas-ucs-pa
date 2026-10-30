@@ -369,28 +369,11 @@ def render_mapa_prancha(
             bbox=dict(boxstyle="square,pad=0.2", fc="#FFFFFF", ec="none", alpha=0.75)
         )
         
-        # Focos no mapa intermediário
+        # Focos no mapa intermediário (simbologia padrão conforme legenda)
         if not gdf_anteriores.empty:
             gdf_anteriores.plot(ax=ax_interm, marker="^", color=FOCOS_ANTERIORES_FILL, edgecolor=FOCOS_ANTERIORES_STROKE, markersize=25, linewidth=0.8, zorder=8)
         if not gdf_recentes.empty:
             gdf_recentes.plot(ax=ax_interm, marker="^", color=FOCOS_RECENTES_FILL, edgecolor=FOCOS_RECENTES_STROKE, markersize=35, linewidth=1.0, zorder=9)
-            
-        # Callout badge para o agrupamento de focos (estilo Área Auditada do mapa_exemplo.png)
-        gdf_all_focos = gpd.GeoDataFrame(pd.concat([gdf_anteriores, gdf_recentes], ignore_index=True)) if (not gdf_anteriores.empty or not gdf_recentes.empty) else gpd.GeoDataFrame()
-        if not gdf_all_focos.empty and len(gdf_all_focos) > 0:
-            fc_c = gdf_all_focos.to_crs(CRS_METRICO_PA).geometry.centroid.to_crs(CRS_GEOGRAFICO).iloc[0]
-            bw = xmax_i - xmin_i
-            bh = ymax_i - ymin_i
-            call_x = fc_c.x + bw * 0.20
-            call_y = fc_c.y - bh * 0.12
-            ax_interm.annotate(
-                f"Focos Ativos\n({len(gdf_all_focos)} focos)",
-                xy=(fc_c.x, fc_c.y), xytext=(call_x, call_y),
-                ha="center", va="center", fontsize=6.8, fontweight="bold", color="#C0392B",
-                arrowprops=dict(arrowstyle="->", color="#C0392B", lw=1.0),
-                bbox=dict(boxstyle="square,pad=0.25", fc="#FFFFFF", ec="#C0392B", lw=0.9),
-                zorder=25
-            )
             
     # Trava a geometria do eixo intermediário para dimensões físicas fixas (102 x 75 mm), sem estreitar pela UC
     ax_interm.set_aspect('equal', adjustable='datalim')
