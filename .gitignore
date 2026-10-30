@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Jupyter / Colab
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Outputs pesados gerados localmente
+outputs/*.png
+outputs/*.pdf
+data/raw/*
+!data/raw/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

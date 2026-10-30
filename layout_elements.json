@@ -1,0 +1,348 @@
+{
+    "layout_name": "Layout",
+    "pages": [
+        {
+            "page_index": 0,
+            "width_mm": 297.0,
+            "height_mm": 210.0
+        }
+    ],
+    "items": [
+        {
+            "id": "rec_legenda",
+            "type": "QgsLayoutItemShape",
+            "page": 0,
+            "z_index": 1.0,
+            "geometry": {
+                "x_mm": 8.15,
+                "y_mm": 151.251,
+                "width_mm": 108.543,
+                "height_mm": 32.883
+            },
+            "properties": {
+                "shape_type": 1
+            }
+        },
+        {
+            "id": "rec_fonte",
+            "type": "QgsLayoutItemShape",
+            "page": 0,
+            "z_index": 2.0,
+            "geometry": {
+                "x_mm": 8.15,
+                "y_mm": 184.135,
+                "width_mm": 108.543,
+                "height_mm": 14.375
+            },
+            "properties": {
+                "shape_type": 1
+            }
+        },
+        {
+            "id": "rec_mapa",
+            "type": "QgsLayoutItemShape",
+            "page": 0,
+            "z_index": 3.0,
+            "geometry": {
+                "x_mm": 8.15,
+                "y_mm": 14.108,
+                "width_mm": 167.106,
+                "height_mm": 137.143
+            },
+            "properties": {
+                "shape_type": 1
+            }
+        },
+        {
+            "id": "rec_localizacao",
+            "type": "QgsLayoutItemShape",
+            "page": 0,
+            "z_index": 4.0,
+            "geometry": {
+                "x_mm": 175.254,
+                "y_mm": 14.108,
+                "width_mm": 111.466,
+                "height_mm": 184.402
+            },
+            "properties": {
+                "shape_type": 1
+            }
+        },
+        {
+            "id": "rec_escala-icons-seta",
+            "type": "QgsLayoutItemShape",
+            "page": 0,
+            "z_index": 5.0,
+            "geometry": {
+                "x_mm": 116.697,
+                "y_mm": 151.251,
+                "width_mm": 58.559,
+                "height_mm": 47.259
+            },
+            "properties": {
+                "shape_type": 1
+            }
+        },
+        {
+            "id": "mapa_geral",
+            "type": "QgsLayoutItemMap",
+            "page": 0,
+            "z_index": 6.0,
+            "geometry": {
+                "x_mm": 11.762,
+                "y_mm": 17.68,
+                "width_mm": 160.0,
+                "height_mm": 130.0
+            },
+            "properties": {
+                "crs": "EPSG:4674",
+                "scale": 999902.8,
+                "extent": {
+                    "xmin": -55.23151288645129,
+                    "ymin": -6.985117881911258,
+                    "xmax": -53.67496951379547,
+                    "ymax": -5.720426391628401
+                },
+                "keep_layer_set": false,
+                "layers": []
+            }
+        },
+        {
+            "id": "mapa_localizacao_imovel",
+            "type": "QgsLayoutItemMap",
+            "page": 0,
+            "z_index": 7.0,
+            "geometry": {
+                "x_mm": 181.83,
+                "y_mm": 23.169,
+                "width_mm": 98.579,
+                "height_mm": 80.0
+            },
+            "properties": {
+                "crs": "EPSG:4674",
+                "scale": 1621166.15,
+                "extent": {
+                    "xmin": -55.24180104689157,
+                    "ymin": -6.964082137227447,
+                    "xmax": -53.68729155754113,
+                    "ymax": -5.702544308588654
+                },
+                "keep_layer_set": false,
+                "layers": []
+            }
+        },
+        {
+            "id": "txt_titulo",
+            "type": "QgsLayoutItemLabel",
+            "page": 0,
+            "z_index": 8.0,
+            "geometry": {
+                "x_mm": 8.0,
+                "y_mm": 5.411,
+                "width_mm": 278.85,
+                "height_mm": 12.302
+            },
+            "properties": {
+                "text": "MAPA DE LOCALIZAÇÃO E ENQUADRAMENTO NO ZONEAMENTO AMBIENTAL – FLOTA DO IRIRI",
+                "font_family": "Arial Black",
+                "font_size_pt": 14.0,
+                "font_bold": true,
+                "font_italic": false,
+                "color_hex": "#000000",
+                "h_align": 4,
+                "v_align": 32
+            }
+        },
+        {
+            "id": "mapa_localizacao_unidade",
+            "type": "QgsLayoutItemMap",
+            "page": 0,
+            "z_index": 9.0,
+            "geometry": {
+                "x_mm": 181.698,
+                "y_mm": 112.245,
+                "width_mm": 98.579,
+                "height_mm": 80.0
+            },
+            "properties": {
+                "crs": "EPSG:4674",
+                "scale": 19785195.5,
+                "extent": {
+                    "xmin": -61.904132731100816,
+                    "ymin": -11.041824839687674,
+                    "xmax": -43.53370686603836,
+                    "ymax": 3.8664139991490245
+                },
+                "keep_layer_set": false,
+                "layers": []
+            }
+        },
+        {
+            "id": "legenda",
+            "type": "QgsLayoutItemLegend",
+            "page": 0,
+            "z_index": 10.0,
+            "geometry": {
+                "x_mm": 8.0,
+                "y_mm": 151.381,
+                "width_mm": 24.333,
+                "height_mm": 11.253
+            },
+            "properties": {
+                "title": "LEGENDA",
+                "linked_map_id": "mapa_geral",
+                "auto_update": false
+            }
+        },
+        {
+            "id": "seta_norte",
+            "type": "QgsLayoutItemPicture",
+            "page": 0,
+            "z_index": 11.0,
+            "geometry": {
+                "x_mm": 141.844,
+                "y_mm": 153.554,
+                "width_mm": 11.162,
+                "height_mm": 13.435
+            },
+            "properties": {
+                "picture_path": "C:/PROGRA~1/QGIS42~1.3/apps/qgis/svg/arrows/Arrow_05.svg",
+                "resize_mode": 0
+            }
+        },
+        {
+            "id": "unnamed_QgsLayoutItemLabel_12",
+            "type": "QgsLayoutItemLabel",
+            "page": 0,
+            "z_index": 12.0,
+            "geometry": {
+                "x_mm": 8.0,
+                "y_mm": 185.533,
+                "width_mm": 112.265,
+                "height_mm": 13.107
+            },
+            "properties": {
+                "text": "Elaboração: Núcleo de Geotecnologias (NGEO/IDEFLOR-Bio)\nDatum: SIRGAS 2000 (EPSG:4674)\nFontes: SEMAS-PA; IDEFLOR-Bio; Processamento digital de imagens Landsat e Sentinel-2/Copernicus (GEE). Base Cartográfica: NGEO/IDEFLOR-Bio.",
+                "font_family": "Arial",
+                "font_size_pt": 8.0,
+                "font_bold": false,
+                "font_italic": false,
+                "color_hex": "#000000",
+                "h_align": 1,
+                "v_align": 32
+            }
+        },
+        {
+            "id": "barra_escala",
+            "type": "QgsLayoutItemScaleBar",
+            "page": 0,
+            "z_index": 13.0,
+            "geometry": {
+                "x_mm": 119.097,
+                "y_mm": 166.989,
+                "width_mm": 14.762,
+                "height_mm": 13.197
+            },
+            "properties": {
+                "style": "hollow",
+                "linked_map_id": "mapa_geral",
+                "units": 1,
+                "number_segments": 2,
+                "number_segments_left": 2,
+                "units_per_segment": 1.0
+            }
+        },
+        {
+            "id": "txt_localizacao_unidade",
+            "type": "QgsLayoutItemLabel",
+            "page": 0,
+            "z_index": 14.0,
+            "geometry": {
+                "x_mm": 175.388,
+                "y_mm": 103.319,
+                "width_mm": 111.462,
+                "height_mm": 8.777
+            },
+            "properties": {
+                "text": "LOCALIZAÇÃO DA UNIDADE",
+                "font_family": "Arial",
+                "font_size_pt": 12.0,
+                "font_bold": true,
+                "font_italic": false,
+                "color_hex": "#000000",
+                "h_align": 4,
+                "v_align": 64
+            }
+        },
+        {
+            "id": "logo_ngeo",
+            "type": "QgsLayoutItemPicture",
+            "page": 0,
+            "z_index": 15.0,
+            "geometry": {
+                "x_mm": 122.76,
+                "y_mm": 181.528,
+                "width_mm": 13.238,
+                "height_mm": 15.279
+            },
+            "properties": {
+                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/dda75f98-a793-44ca-a966-bcc1585eb271.png",
+                "resize_mode": 0
+            }
+        },
+        {
+            "id": "txt_localizacao_imovel",
+            "type": "QgsLayoutItemLabel",
+            "page": 0,
+            "z_index": 16.0,
+            "geometry": {
+                "x_mm": 175.256,
+                "y_mm": 14.108,
+                "width_mm": 111.462,
+                "height_mm": 8.911
+            },
+            "properties": {
+                "text": "LOCALIZAÇÃO DO IMÓVEL",
+                "font_family": "Arial",
+                "font_size_pt": 12.0,
+                "font_bold": true,
+                "font_italic": false,
+                "color_hex": "#000000",
+                "h_align": 4,
+                "v_align": 64
+            }
+        },
+        {
+            "id": "logo_ideflorbio",
+            "type": "QgsLayoutItemPicture",
+            "page": 0,
+            "z_index": 17.0,
+            "geometry": {
+                "x_mm": 138.228,
+                "y_mm": 181.528,
+                "width_mm": 17.806,
+                "height_mm": 14.56
+            },
+            "properties": {
+                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/Logomarca_Ideflor-bio.png",
+                "resize_mode": 0
+            }
+        },
+        {
+            "id": "logo_estado_para",
+            "type": "QgsLayoutItemPicture",
+            "page": 0,
+            "z_index": 18.0,
+            "geometry": {
+                "x_mm": 157.066,
+                "y_mm": 181.072,
+                "width_mm": 15.024,
+                "height_mm": 15.087
+            },
+            "properties": {
+                "picture_path": "H:/Meu Drive/IDEFLOR/LOGO/goveno-do-para-logo-png_seeklogo-507507.png",
+                "resize_mode": 0
+            }
+        }
+    ]
+}
