@@ -1,6 +1,6 @@
 # Cartografia de Focos de Queimadas e Severidade em UCs do Pará
 
-[![Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](notebooks/colab_runner.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Google Earth Engine](https://img.shields.io/badge/Google%20Earth%20Engine-API-green.svg)](https://earthengine.google.com/)
 [![Datum](https://img.shields.io/badge/Datum-SIRGAS%202000-teal.svg)](https://www.ibge.gov.br/)
@@ -81,7 +81,7 @@ cartografia-queimadas-ucs-pa/
 ## 4. Guia Rápido de Execução
 
 ### Opção A: Execução no Google Colab (Recomendada)
-1. Abra o arquivo [`notebooks/colab_runner.ipynb`](notebooks/colab_runner.ipynb) diretamente no Google Colab.
+1. Clique no botão [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb) para abrir o notebook diretamente no Google Colab.
 2. Execute a célula de autenticação GEE (`ee.Authenticate()` / `ee.Initialize()`).
 3. Escolha a Unidade de Conservação (ex: `APA Marajó`), o intervalo de datas e execute.
 4. Visualize as 3 pranchas geradas diretamente no navegador e baixe os PDFs.
