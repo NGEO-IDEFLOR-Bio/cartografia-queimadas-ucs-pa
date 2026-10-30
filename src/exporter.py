@@ -8,6 +8,7 @@ Coordena a geração automatizada das três pranchas cartográficas solicitadas:
 Exportando em PNG alta resolução (300 DPI) e PDF vetorial para cada versão.
 """
 
+import unicodedata
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List, Union
 import geopandas as gpd
@@ -32,8 +33,32 @@ from src.bdqueimadas import (
 from src.layout_engine import render_mapa_prancha
 
 
+def _strip_accents(text: str) -> str:
+    """Normaliza texto removendo acentos e convertendo para minúsculas."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text)
+        if unicodedata.category(c) != "Mn"
+    ).lower().strip()
+
+
+def list_all_ucs() -> List[str]:
+    """Retorna a lista oficial de todas as Unidades de Conservação cadastradas no GeoJSON."""
+    if not FILE_UCS_ESTADUAIS.exists():
+        raise FileNotFoundError(f"Base de UCs não encontrada em: {FILE_UCS_ESTADUAIS}")
+        
+    gdf = gpd.read_file(FILE_UCS_ESTADUAIS)
+    col_nome = next((c for c in gdf.columns if any(k in c.lower() for k in ["nome", "denominac", "uc"])), None)
+    if not col_nome:
+        raise ValueError("Coluna de denominação da UC não encontrada no GeoJSON.")
+        
+    return sorted(gdf[col_nome].dropna().unique().tolist())
+
+
 def find_uc_by_name(nome_uc: str) -> gpd.GeoDataFrame:
-    """Localiza uma Unidade de Conservação Estadual no cadastro oficial por busca flexível."""
+    """
+    Localiza uma Unidade de Conservação Estadual no cadastro oficial por busca flexível
+    insensível a acentuação e termos como 'APA', 'PARQUE', etc.
+    """
     if not FILE_UCS_ESTADUAIS.exists():
         raise FileNotFoundError(f"Base de UCs não encontrada em: {FILE_UCS_ESTADUAIS}")
         
@@ -41,16 +66,55 @@ def find_uc_by_name(nome_uc: str) -> gpd.GeoDataFrame:
     if gdf.crs != CRS_GEOGRAFICO:
         gdf = gdf.to_crs(CRS_GEOGRAFICO)
         
-    # Coluna do nome
     col_nome = next((c for c in gdf.columns if any(k in c.lower() for k in ["nome", "denominac", "uc"])), None)
     if not col_nome:
         raise ValueError("Coluna de denominação da UC não encontrada no GeoJSON.")
         
-    match = gdf[gdf[col_nome].str.contains(nome_uc, case=False, na=False)]
-    if match.empty:
-        raise ValueError(f"Unidade de Conservação '{nome_uc}' não localizada. UCs disponíveis: {gdf[col_nome].tolist()[:10]}...")
+    # Busca 1: correspondência exata
+    match = gdf[gdf[col_nome].str.lower() == nome_uc.strip().lower()]
+    if not match.empty:
+        return match.iloc[[0]]
         
-    return match.iloc[[0]]
+    # Busca 2: correspondência sem acentos
+    target_clean = _strip_accents(nome_uc)
+    names_clean = gdf[col_nome].apply(_strip_accents)
+    
+    # 2.1. Tentar match direto da string limpa inteira
+    mask = names_clean.str.contains(target_clean, regex=False)
+    match = gdf[mask]
+    if not match.empty:
+        return match.iloc[[0]]
+        
+    # 2.2. Stopwords de categorias e conectivos
+    stopwords = {
+        "area", "protecao", "ambiental", "parque", "estadual", "reserva",
+        "floresta", "refugio", "estacao", "ecologica", "biologica", "vida",
+        "silvestre", "desenvolvimento", "sustentavel", "monumento", "natural",
+        "apa", "flota", "revis", "rebio", "esec", "mona", "rds", "pema",
+        "de", "do", "da", "dos", "das", "e", "em", "no", "na"
+    }
+    terms = [t for t in target_clean.replace("-", " ").replace("/", " ").split() if len(t) > 2 and t not in stopwords]
+    
+    # Tentar match pelos termos distintivos (ex: 'marajo', 'combu', 'maicuru', 'iriri', 'trombetas')
+    if terms:
+        for term in terms:
+            mask_term = names_clean.str.contains(term, regex=False)
+            if mask_term.any():
+                return gdf[mask_term].iloc[[0]]
+                
+    # Se termo 'pema' for buscado diretamente
+    if "pema" in target_clean:
+        match_pema = gdf[names_clean.str.contains("monte alegre", regex=False)]
+        if not match_pema.empty:
+            return match_pema.iloc[[0]]
+                
+    # Se não encontrar, lança erro com todas as 29 UCs oficiais listadas
+    ucs_oficiais = list_all_ucs()
+    lista_fmt = "\n".join(f"  • {u}" for u in ucs_oficiais)
+    raise ValueError(
+        f"Unidade de Conservação '{nome_uc}' não localizada no cadastro oficial.\n"
+        f"Total de {len(ucs_oficiais)} UCs disponíveis em ucs_estaduais.geojson:\n{lista_fmt}"
+    )
 
 
 def processar_e_exportar_todos_os_mapas(
