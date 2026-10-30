@@ -2,19 +2,27 @@
 Gerador de Relatórios Técnicos Oficiais de Queimadas (NGEO / IDEFLOR-Bio)
 ========================================================================
 Gera relatórios técnicos padronizados em formato Microsoft Word (.docx)
-a partir do template institucional com cabeçalho oficial preservado,
-estilo tipográfico Arial 12pt, espaçamento 1,5 e foco em subsídios rápidos
-e acionáveis para tomada de decisão ambiental e fiscalização.
+a partir do template institucional com cabeçalho oficial preservado.
+
+Especificações Formais e Tipográficas Institucionais:
+- Tipografia: Arial 12 pt no corpo de texto
+- Espaçamento entre linhas: 1,5 linhas
+- Recuo na primeira linha dos parágrafos: exatamente 1,5 cm (Cm(1.5))
+- Listas com tópicos: recuo padronizado de lista institucional
+- Tabelas: estilo Table Grid institucional, fonte Arial 9 pt, zebrado suave
+- Referências: norma ABNT NBR 6023 (alinhamento à esquerda, entrelinhas simples)
+- Apêndice A: Tabela completa de localização geográfica (coordenadas SIRGAS 2000)
+- Contextualização: 100% dinâmica e aderente para qualquer uma das 29 UCs do Pará
 """
 
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, date
 
 import docx
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Inches, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml import parse_xml, OxmlElement
@@ -32,8 +40,8 @@ def set_cell_background(cell, color_hex: str):
     tcPr.append(shd)
 
 
-def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
-    """Define o preenchimento interno (padding) da célula."""
+def set_cell_margins(cell, top=80, bottom=80, left=120, right=120):
+    """Define o preenchimento interno (padding) da célula em dxa."""
     tcPr = cell._element.get_or_add_tcPr()
     tcMar = parse_xml(
         f'<w:tcMar {nsdecls("w")}>'
@@ -46,24 +54,23 @@ def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
     tcPr.append(tcMar)
 
 
-def add_formatted_paragraph(
+def add_body_paragraph(
     doc: Document,
     text: str,
     font_size: float = 12.0,
     bold: bool = False,
     italic: bool = False,
     color_rgb: RGBColor = RGBColor(0x22, 0x22, 0x22),
-    align: WD_ALIGN_PARAGRAPH = WD_ALIGN_PARAGRAPH.JUSTIFY,
     space_before: float = 0.0,
-    space_after: float = 6.0,
-    line_spacing: float = 1.5
+    space_after: float = 6.0
 ):
-    """Adiciona um parágrafo perfeitamente tipografado em Arial."""
+    """Adiciona parágrafo em Arial 12pt, entrelinhas 1.5, recuo de 1,5 cm na primeira linha e justificado."""
     p = doc.add_paragraph()
-    p.alignment = align
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.space_before = Pt(space_before)
     p.paragraph_format.space_after = Pt(space_after)
-    p.paragraph_format.line_spacing = line_spacing
+    p.paragraph_format.line_spacing = 1.5
+    p.paragraph_format.first_line_indent = Cm(1.5)
 
     run = p.add_run(text)
     run.font.name = "Arial"
@@ -74,8 +81,61 @@ def add_formatted_paragraph(
     return p
 
 
+def add_topic_item(
+    doc: Document,
+    prefix_text: str,
+    body_text: str,
+    font_size: float = 11.0,
+    space_after: float = 3.0
+):
+    """Adiciona item de lista com recuo padronizado e tópicos em Arial."""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p.paragraph_format.space_before = Pt(1.0)
+    p.paragraph_format.space_after = Pt(space_after)
+    p.paragraph_format.line_spacing = 1.3
+    p.paragraph_format.left_indent = Cm(1.5)
+    p.paragraph_format.first_line_indent = -Cm(0.5)
+
+    r_bullet = p.add_run("• ")
+    r_bullet.font.name = "Arial"
+    r_bullet.font.size = Pt(font_size)
+    r_bullet.bold = True
+    r_bullet.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
+
+    if prefix_text:
+        r_pre = p.add_run(f"{prefix_text}: ")
+        r_pre.font.name = "Arial"
+        r_pre.font.size = Pt(font_size)
+        r_pre.bold = True
+        r_pre.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
+
+    r_body = p.add_run(body_text)
+    r_body.font.name = "Arial"
+    r_body.font.size = Pt(font_size)
+    r_body.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    return p
+
+
+def add_abnt_reference(doc: Document, text: str):
+    """Adiciona referência no formato ABNT NBR 6023 (alinhamento à esquerda, entrelinhas simples, espaço após)."""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_before = Pt(2.0)
+    p.paragraph_format.space_after = Pt(6.0)
+    p.paragraph_format.line_spacing = 1.0
+    p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.left_indent = Cm(0)
+
+    run = p.add_run(text)
+    run.font.name = "Arial"
+    run.font.size = Pt(9.5)
+    run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    return p
+
+
 def add_heading_section(doc: Document, text: str, is_main: bool = True):
-    """Adiciona títulos de seções institucionais em Arial negrito."""
+    """Adiciona títulos de seções institucionais em Arial negrito sem recuo de primeira linha."""
     size = 12.0 if is_main else 11.5
     before = 12.0 if is_main else 8.0
     after = 4.0
@@ -84,6 +144,8 @@ def add_heading_section(doc: Document, text: str, is_main: bool = True):
     p.paragraph_format.space_before = Pt(before)
     p.paragraph_format.space_after = Pt(after)
     p.paragraph_format.line_spacing = 1.15
+    p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.left_indent = Cm(0)
     p.paragraph_format.keep_with_next = True
 
     run = p.add_run(text)
@@ -94,18 +156,141 @@ def add_heading_section(doc: Document, text: str, is_main: bool = True):
     return p
 
 
+def generate_dynamic_uc_context(gdf_uc: Optional[gpd.GeoDataFrame], nome_uc: str) -> str:
+    """
+    Gera automaticamente uma contextualização formal, jurídica e geográfica rigorosa
+    baseada nos atributos cadastrais oficiais de qualquer uma das 29 UCs estaduais do Pará.
+    """
+    if gdf_uc is None or gdf_uc.empty:
+        try:
+            from src.exporter import find_uc_by_name
+            gdf_uc = find_uc_by_name(nome_uc)
+        except Exception:
+            gdf_uc = None
+
+    if gdf_uc is not None and not gdf_uc.empty:
+        row = gdf_uc.iloc[0]
+        nome = str(row.get("Nome", nome_uc)).strip()
+        cat = str(row.get("Categoria", "")).strip().upper()
+        grupo = str(row.get("Grupo", "Uso Sustentável")).strip()
+        decreto = str(row.get("Situação Legal", "")).strip()
+        area_ha = row.get("Área Calculada (ha)", row.get("Área (decreto) (ha)", 0))
+        munis = str(row.get("Municipios_lista", "")).strip()
+        ri = str(row.get("RegioesIntegracao_lista", "")).strip()
+    else:
+        nome = nome_uc
+        cat = "UC"
+        grupo = "Uso Sustentável"
+        decreto = ""
+        area_ha = 0
+        munis = ""
+        ri = ""
+
+    # 1. Base Jurídica de Criação
+    if decreto and decreto.lower() != "nan":
+        txt_legal = f"criada e regulamentada por meio do {decreto}"
+    else:
+        txt_legal = "instituída formalmente no âmbito do Sistema Estadual de Unidades de Conservação (SEUC/PA)"
+
+    # 2. Finalidade e Vocação pelo Grupo/Categoria do SNUC (Lei Federal nº 9.985/2000)
+    is_prot_integral = "PROTEÇÃO INTEGRAL" in grupo.upper() or any(k in cat for k in ["PARQUE", "ESEC", "REBIO", "REVIS", "MONA"])
+
+    if is_prot_integral:
+        if "PARQUE" in cat:
+            finalidade = (
+                "enquadra-se no Grupo de Proteção Integral (categoria Parque Estadual), tendo como objetivo primordial "
+                "a preservação de ecossistemas naturais de grande relevância ecológica e beleza cênica, sendo admitido "
+                "apenas o uso indireto de seus recursos naturais e o desenvolvimento de atividades de pesquisa científica, "
+                "educação ambiental e turismo ecológico"
+            )
+        elif "ESEC" in cat or "ESTAÇÃO" in cat:
+            finalidade = (
+                "integra o Grupo de Proteção Integral na categoria de Estação Ecológica (ESEC), tendo como objetivo precípuo "
+                "a preservação da natureza e a realização de pesquisas científicas, sendo expressamente vedada a exploração "
+                "direta de recursos ou alterações antrópicas em seus ecossistemas"
+            )
+        elif "REBIO" in cat or "BIOLÓGICA" in cat:
+            finalidade = (
+                "constitui uma Reserva Biológica (REBIO), unidade de Proteção Integral que visa à preservação integral "
+                "da biota e demais atributos naturais sem interferência humana direta, ressalvadas medidas de recuperação "
+                "e pesquisas científicas devidamente autorizadas"
+            )
+        elif "REVIS" in cat or "REFÚGIO" in cat:
+            finalidade = (
+                "está categorizada como Refúgio de Vida Silvestre (REVIS), unidade de Proteção Integral destinada a assegurar "
+                "condições para a existência ou reprodução de espécies da flora local e da fauna residente ou migratória"
+            )
+        elif "MONA" in cat or "MONUMENTO" in cat:
+            finalidade = (
+                "enquadra-se como Monumento Natural (MONA), visando a preservar sítios naturais raros, singulares ou de "
+                "grande beleza cênica"
+            )
+        else:
+            finalidade = (
+                "integra o Grupo de Proteção Integral, com foco na preservação estrita dos recursos ambientais e processos ecológicos nativos"
+            )
+    else:
+        # Uso Sustentável
+        if "RDS" in cat or "DESENVOLVIMENTO SUSTENTÁVEL" in cat:
+            finalidade = (
+                "enquadra-se no Grupo de Uso Sustentável como Reserva de Desenvolvimento Sustentável (RDS), gerida pelo IDEFLOR-Bio "
+                "com a missão precípua de compatibilizar a conservação da biodiversidade com o uso sustentável dos recursos naturais "
+                "pelas populações tradicionais residentes"
+            )
+        elif "FLOTA" in cat or "FLORESTA" in cat:
+            finalidade = (
+                "constitui uma Floresta Estadual (FLOTA), categoria de Uso Sustentável com vocação voltada ao manejo florestal sustentável "
+                "de recursos madeireiros e não-madeireiros, à conservação da cobertura florestal contínua e à pesquisa científica aplicada"
+            )
+        elif "APA" in cat or "PROTEÇÃO AMBIENTAL" in cat:
+            finalidade = (
+                "está estabelecida como Área de Proteção Ambiental (APA), unidade de Uso Sustentável que concilia terras públicas "
+                "e privadas sob zoneamento ecológico-econômico, visando a disciplinar o uso do solo, proteger os recursos hídricos "
+                "e manter os remanescentes de vegetação nativa"
+            )
+        else:
+            finalidade = (
+                "integra o Grupo de Uso Sustentável, tendo como foco compatibilizar o uso equilibrado dos recursos naturais "
+                "com a manutenção da integridade da paisagem ambiental"
+            )
+
+    # 3. Contexto Territorial, Hídrico e Fitogeográfico
+    try:
+        val_area = float(area_ha)
+        txt_area = f"com uma área territorial calculada em aproximadamente {val_area:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " hectares"
+    except Exception:
+        txt_area = "com expressiva abrangência territorial"
+
+    txt_loc = ""
+    if munis and munis.lower() != "nan":
+        txt_loc += f", abrangendo setores territoriais do(s) município(s) de {munis}"
+    if ri and ri.lower() != "nan":
+        txt_loc += f", no âmbito da Região de Integração {ri}"
+
+    txt_fito = (
+        f"A {nome} integra o Sistema Estadual de Unidades de Conservação do Pará (SEUC/PA), sob gestão do IDEFLOR-Bio, {txt_legal}. "
+        f"A unidade {finalidade}, estruturando-se {txt_area}{txt_loc}. "
+        "No contexto fitofisionômico da Amazônia paraense, seus ecossistemas encontram-se sujeitos aos ciclos sazonais de estiagem e variações no balanço hídrico regional, "
+        "condição climática que historicamente eleva o estresse da vegetação e intensifica a suscetibilidade a focos de calor e queimadas antrópicas acidentais ou irregulares em suas zonas limítrofes e corredores de acesso."
+    )
+    return txt_fito
+
+
 def build_technical_report_docx(
     nome_uc: str,
     periodo_str: str,
     gdf_focos_uc: gpd.GeoDataFrame,
     metricas: Dict[str, Any],
+    gdf_uc: Optional[gpd.GeoDataFrame] = None,
     output_path: Optional[Path] = None
 ) -> Path:
     """
-    Gera o Relatório Técnico Oficial do NGEO em formato .docx,
-    preservando o template institucional e o cabeçalho oficial do IDEFLOR-Bio.
+    Gera o Relatório Técnico Oficial do NGEO em formato Microsoft Word (.docx),
+    preservando rigorosamente o cabeçalho oficial do IDEFLOR-Bio, a tipografia Arial 12pt,
+    espaçamento 1,5, recuo de 1,5 cm na primeira linha dos parágrafos, tabelas executivas,
+    apêndice com coordenadas dos focos e referências ABNT.
     """
-    # 1. Carregar Template Matriz com Cabeçalho
+    # 1. Carregar Template Matriz com Cabeçalho Institucional
     if FILE_TEMPLATE_RELATORIO.exists():
         doc = Document(str(FILE_TEMPLATE_RELATORIO))
         # Limpar apenas os elementos do corpo do documento
@@ -123,11 +308,13 @@ def build_technical_report_docx(
     section.bottom_margin = Inches(0.79)
     section.right_margin = Inches(0.79)
     
-    # 2. Título do Relatório
+    # 2. Título Principal
     p_tipo = doc.add_paragraph()
     p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_tipo.paragraph_format.space_before = Pt(0)
     p_tipo.paragraph_format.space_after = Pt(2)
+    p_tipo.paragraph_format.line_spacing = 1.15
+    p_tipo.paragraph_format.first_line_indent = Cm(0)
     r_tipo = p_tipo.add_run("RELATÓRIO TÉCNICO")
     r_tipo.font.name = "Arial"
     r_tipo.font.size = Pt(13.0)
@@ -138,6 +325,8 @@ def build_technical_report_docx(
     p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_sub.paragraph_format.space_before = Pt(0)
     p_sub.paragraph_format.space_after = Pt(14)
+    p_sub.paragraph_format.line_spacing = 1.15
+    p_sub.paragraph_format.first_line_indent = Cm(0)
     r_sub = p_sub.add_run(f"Monitoramento de Focos de Calor e Severidade Espectral – {nome_uc}")
     r_sub.font.name = "Arial"
     r_sub.font.size = Pt(11.0)
@@ -165,26 +354,11 @@ def build_technical_report_docx(
         ("Data de Emissão", data_hoje_extenso),
     ]
     for rotulo, val in ident_itens:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(2.5)
-        p.paragraph_format.line_spacing = 1.15
-        
-        r1 = p.add_run(f"• {rotulo}: ")
-        r1.font.name = "Arial"
-        r1.font.size = Pt(11.0)
-        r1.bold = True
-        r1.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
-        
-        r2 = p.add_run(val)
-        r2.font.name = "Arial"
-        r2.font.size = Pt(11.0)
-        r2.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        add_topic_item(doc, rotulo, val, font_size=11.0, space_after=2.5)
 
     # 4. Seção 2: Finalidade e Objetivos
     add_heading_section(doc, "2. Finalidade e Objetivos")
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         "O presente relatório técnico tem por finalidade fornecer subsídios geoespaciais "
         "rápidos, objetivos e auditados para a tomada de decisão no âmbito da Diretoria de "
@@ -192,7 +366,7 @@ def build_technical_report_docx(
         "Ambiental da SEMAS e de órgãos operacionais parceiros (Batalhão de Polícia Ambiental e "
         "Corpo de Bombeiros Militar do Pará)."
     )
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         "O diagnóstico visa a identificar a cronologia, magnitude espacial e intensidade de "
         "focos de calor detectados no interior da Unidade de Conservação, correlacionando "
@@ -202,21 +376,14 @@ def build_technical_report_docx(
         "prioritárias de fiscalização em campo."
     )
 
-    # 5. Seção 3: Contextualização da Área de Estudo
+    # 5. Seção 3: Contextualização da Área de Estudo (100% Dinâmica para as 29 UCs)
     add_heading_section(doc, "3. Contextualização da Área de Estudo")
-    add_formatted_paragraph(
-        doc,
-        f"A {nome_uc} integra o Sistema Estadual de Unidades de Conservação do Pará (SEUC/PA), "
-        "sendo gerida pelo IDEFLOR-Bio com a missão de compatibilizar a conservação da biodiversidade "
-        "com o uso sustentável dos recursos naturais pelas populações tradicionais residentes. "
-        "A unidade abrange setores de expressiva relevância hidrológica e florestal, caracterizada "
-        "por ecossistemas de floresta tropical densa entrecortados por canais fluviais e ilhas, "
-        "estando sujeita a pressões sazonais de estiagem e queimadas antrópicas."
-    )
+    texto_contexto = generate_dynamic_uc_context(gdf_uc, nome_uc)
+    add_body_paragraph(doc, texto_contexto)
 
     # 6. Seção 4: Procedimentos Metodológicos Realizados
     add_heading_section(doc, "4. Procedimentos Metodológicos Realizados")
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         "Os procedimentos analíticos e cartográficos foram conduzidos no ambiente automatizado "
         "do Núcleo de Geotecnologias (NGEO), estruturado nas seguintes etapas encadeadas:"
@@ -241,23 +408,8 @@ def build_technical_report_docx(
          "(300 DPI) em 3 escalas integradas: Detalhe da UC com mosaico orbital, Contexto Regional da Unidade "
          "e Macroestadual no Pará, conforme o padrão oficial do NGEO.")
     ]
-    for titulo_p, desc_p in passos_met:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.3
-        
-        r1 = p.add_run(f"4.{passos_met.index((titulo_p, desc_p))+1} {titulo_p}: ")
-        r1.font.name = "Arial"
-        r1.font.size = Pt(11.0)
-        r1.bold = True
-        r1.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
-        
-        r2 = p.add_run(desc_p)
-        r2.font.name = "Arial"
-        r2.font.size = Pt(11.0)
-        r2.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    for rotulo, desc in passos_met:
+        add_topic_item(doc, rotulo, desc, font_size=11.0, space_after=3.5)
 
     # 7. Seção 5: Resultados e Diagnóstico Espacial
     add_heading_section(doc, "5. Resultados e Diagnóstico Espacial")
@@ -267,9 +419,9 @@ def build_technical_report_docx(
     anteriores_focos = metricas.get("anteriores", 0)
     data_rec = metricas.get("data_ultima_observacao", "Recente")
     
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
-        f"No período avaliado ({periodo_str}), foram contabilizados 73 focos de calor incidentes "
+        f"No período avaliado ({periodo_str}), foram contabilizados {total_focos} focos de calor incidentes "
         f"no interior da {nome_uc}. Desse montante, {recentes_focos} ocorrência(s) correspondem "
         f"ao registro mais recente do monitoramento ({data_rec}), indicando potencial queima em andamento "
         f"ou brasa residual, enquanto {anteriores_focos} focos referem-se ao acúmulo histórico ao longo dos dias anteriores."
@@ -299,12 +451,16 @@ def build_technical_report_docx(
         
         p0 = cell0.paragraphs[0]
         p0.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p0.paragraph_format.first_line_indent = Cm(0)
+        p0.paragraph_format.line_spacing = 1.15
         r0 = p0.add_run(c0)
         r0.font.name = "Arial"
         r0.font.size = Pt(9.5)
         
         p1 = cell1.paragraphs[0]
         p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p1.paragraph_format.first_line_indent = Cm(0)
+        p1.paragraph_format.line_spacing = 1.15
         r1 = p1.add_run(c1)
         r1.font.name = "Arial"
         r1.font.size = Pt(9.5)
@@ -319,8 +475,8 @@ def build_technical_report_docx(
             set_cell_background(cell1, "FFFFFF" if row_idx % 2 == 1 else "F8F9F9")
 
     p_espaco = doc.add_paragraph()
-    p_espaco.paragraph_format.space_before = Pt(4)
-    p_espaco.paragraph_format.space_after = Pt(4)
+    p_espaco.paragraph_format.space_before = Pt(3)
+    p_espaco.paragraph_format.space_after = Pt(3)
 
     # Tabela 2: Distribuição por Satélite / Sensor
     add_heading_section(doc, "5.2 Detalhamento Técnico dos Sensores Orbitais", is_main=False)
@@ -342,6 +498,8 @@ def build_technical_report_docx(
         set_cell_margins(cell, top=70, bottom=70, left=100, right=100)
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.first_line_indent = Cm(0)
+        p.paragraph_format.line_spacing = 1.15
         r = p.add_run(h_text)
         r.font.name = "Arial"
         r.font.size = Pt(9.5)
@@ -357,17 +515,19 @@ def build_technical_report_docx(
             set_cell_margins(cell, top=60, bottom=60, left=100, right=100)
             p = cell.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.first_line_indent = Cm(0)
+            p.paragraph_format.line_spacing = 1.15
             r = p.add_run(c_val)
             r.font.name = "Arial"
             r.font.size = Pt(9.0)
 
     p_espaco2 = doc.add_paragraph()
-    p_espaco2.paragraph_format.space_before = Pt(4)
-    p_espaco2.paragraph_format.space_after = Pt(4)
+    p_espaco2.paragraph_format.space_before = Pt(3)
+    p_espaco2.paragraph_format.space_after = Pt(3)
 
     # 5.3 Pranchas Cartográficas Geradas
     add_heading_section(doc, "5.3 Pranchas Cartográficas Oficiais Anexas", is_main=False)
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         "Como produto cartográfico de alta fidelidade técnica, foram geradas 3 (três) pranchas "
         "oficiais padronizadas em alta resolução (300 DPI) para subsidiar a análise visual dos "
@@ -377,7 +537,7 @@ def build_technical_report_docx(
     pranchas_desc = [
         ("Prancha em Cor Natural (RGB: B4, B3, B2)",
          "Apresenta a visualização real da cobertura do solo e do relevo, permitindo contextualizar "
-         "a proximidade dos focos em relação à malha hidrográfica do Rio Xingu e ocupações consolidadas."),
+         "a proximidade dos focos em relação à malha hidrográfica e ocupações consolidadas."),
         ("Prancha em Falsa Cor (Realce Queimadas: B12, B8, B4)",
          "Composição no espectro do infravermelho de ondas curtas (SWIR), que proporciona contraste "
          "máximo entre cicatrizes calcinadas (tonalidades avermelhadas/marrom-escuras) e o dossel "
@@ -388,55 +548,31 @@ def build_technical_report_docx(
          "em amarelo e floresta preservada em verde escuro, mantendo corpos d'água resguardados em azul.")
     ]
     for t_pran, d_pran in pranchas_desc:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(3)
-        p.paragraph_format.line_spacing = 1.3
-        
-        r1 = p.add_run(f"• {t_pran}: ")
-        r1.font.name = "Arial"
-        r1.font.size = Pt(11.0)
-        r1.bold = True
-        r1.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
-        
-        r2 = p.add_run(d_pran)
-        r2.font.name = "Arial"
-        r2.font.size = Pt(11.0)
-        r2.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        add_topic_item(doc, t_pran, d_pran, font_size=11.0, space_after=3.5)
 
     # 8. Seção 6: Conclusões e Recomendações para Tomada de Decisão
     add_heading_section(doc, "6. Conclusões e Recomendações para Tomada de Decisão")
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         f"A análise espacial integrada dos {total_focos} focos de calor registrados na {nome_uc} "
-        "revela um padrão de agrupamento concentrado no setor centro-sul da unidade, com proximidade "
-        "a limites de transição de cobertura vegetal. A presença de 2 focos na data mais recente "
-        f"({data_rec}) aponta para atividade de queima recente que requer verificação imediata."
+        "revela um padrão de agrupamento com proximidade a limites de transição de cobertura vegetal. "
+        f"A presença de {recentes_focos} foco(s) na data mais recente ({data_rec}) aponta para atividade de queima "
+        "recente que requer verificação imediata para prevenir alastramento a maciços florestais contíguos."
     )
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
-        "Diante do diagnóstico, recomendam-se as seguintes medidas operacionais prioritárias:"
+        "Diante do diagnóstico operacional, recomendam-se as seguintes medidas táticas prioritárias:"
     )
     
     rec_itens = [
-        "Despacho prioritário de brigadas florestais e equipes do Batalhão de Polícia Ambiental para averiguação dos focos recentes no setor centro-sul da unidade;",
-        "Utilização das coordenadas geográficas tabuladas para traçado de rotas táticas de fiscalização fluvial e terrestre;",
+        "Despacho prioritário de brigadas florestais e equipes do Batalhão de Polícia Ambiental para averiguação dos focos recentes na unidade;",
+        "Utilização das coordenadas geográficas tabuladas no Apêndice A para traçado de rotas táticas de fiscalização fluvial e terrestre;",
         "Articulação interinstitucional com o Corpo de Bombeiros Militar para contingência preventiva na hipótese de propagação de fogo em vegetação nativa."
     ]
     for r_txt in rec_itens:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_before = Pt(1)
-        p.paragraph_format.space_after = Pt(3)
-        p.paragraph_format.line_spacing = 1.3
-        
-        r = p.add_run(f"a) {r_txt}" if rec_itens.index(r_txt)==0 else (f"b) {r_txt}" if rec_itens.index(r_txt)==1 else f"c) {r_txt}"))
-        r.font.name = "Arial"
-        r.font.size = Pt(11.0)
-        r.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+        add_topic_item(doc, "", r_txt, font_size=11.0, space_after=3.0)
 
-    add_formatted_paragraph(
+    add_body_paragraph(
         doc,
         "As 3 (três) pranchas cartográficas institucionais padronizadas seguem anexas ao processo "
         "em formato PDF. Informa-se, ademais, que a base vetorial georreferenciada dos focos "
@@ -445,37 +581,30 @@ def build_technical_report_docx(
         "para carregamento direto em equipamentos de navegação das equipes de campo."
     )
 
-    # 9. Seção 7: Referências Bibliográficas e Fontes de Dados
+    # 9. Seção 7: Referências Bibliográficas e Fontes de Dados (Formato ABNT NBR 6023)
     add_heading_section(doc, "7. Referências e Fontes de Dados")
     
     refs = [
-        "BRASIL. Instituto Nacional de Pesquisas Espaciais (INPE). Programa Queimadas: BDQueimadas – Banco de Dados de Queimadas. Disponível em: <https://queimadas.dgi.inpe.br/>. Acesso em: 30 out. 2026.",
-        "EUROPEAN SPACE AGENCY (ESA). Copernicus Sentinel-2: Multispectral Instrument (MSI) Harmonized Level-2A Surface Reflectance. Processado via Google Earth Engine. 2026.",
-        "INSTITUTO BRASILEIRO DE GEOGRAFIA E ESTATÍSTICA (IBGE). Sistema Geodésico Brasileiro: Especificações e Normas para Levantamentos Geodésicos – SIRGAS 2000 (EPSG:4674). Rio de Janeiro: IBGE, 2005.",
-        "PARÁ. Instituto de Desenvolvimento Florestal e da Biodiversidade do Estado do Pará (IDEFLOR-Bio). Base Cartográfica Oficial das Unidades de Conservação Estaduais do Pará (DGMUC/NGEO). Belém: IDEFLOR-Bio, 2026."
+        "BRASIL. Instituto Nacional de Pesquisas Espaciais (INPE). Programa Queimadas: BDQueimadas – Banco de Dados de Queimadas. São José dos Campos: INPE, 2026. Disponível em: <https://queimadas.dgi.inpe.br/>. Acesso em: 30 out. 2026.",
+        "EUROPEAN SPACE AGENCY (ESA). Copernicus Sentinel-2: Multispectral Instrument (MSI) Harmonized Level-2A Surface Reflectance. Processamento digital em nuvem via Google Earth Engine. Paris: ESA, 2026.",
+        "INSTITUTO BRASILEIRO DE GEOGRAFIA E ESTATÍSTICA (IBGE). Resolução nº 1, de 25 de fevereiro de 2005. Estabelece a adoção do Sistema de Referência Geocêntrico para as Américas (SIRGAS 2000 / EPSG:4674) como o novo referencial geodésico oficial brasileiro. Rio de Janeiro: IBGE, 2005.",
+        "PARÁ. Instituto de Desenvolvimento Florestal e da Biodiversidade do Estado do Pará (IDEFLOR-Bio). Base Cartográfica Oficial das Unidades de Conservação Estaduais do Pará. Belém: DGMUC/NGEO, 2026."
     ]
     for ref_t in refs:
-        p = doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.15
-        
-        r = p.add_run(ref_t)
-        r.font.name = "Arial"
-        r.font.size = Pt(9.5)
-        r.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        add_abnt_reference(doc, ref_t)
 
     # 10. Assinatura Institucional
     p_ass_espaco = doc.add_paragraph()
-    p_ass_espaco.paragraph_format.space_before = Pt(16)
+    p_ass_espaco.paragraph_format.space_before = Pt(14)
     p_ass_espaco.paragraph_format.space_after = Pt(0)
+    p_ass_espaco.paragraph_format.first_line_indent = Cm(0)
     
     p_ass = doc.add_paragraph()
     p_ass.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_ass.paragraph_format.space_before = Pt(6)
     p_ass.paragraph_format.space_after = Pt(2)
     p_ass.paragraph_format.line_spacing = 1.15
+    p_ass.paragraph_format.first_line_indent = Cm(0)
     p_ass.paragraph_format.keep_with_next = True
     
     r_ass1 = p_ass.add_run("SAMUEL DA COSTA DOS SANTOS\n")
@@ -492,7 +621,95 @@ def build_technical_report_docx(
     r_ass2.font.size = Pt(10.0)
     r_ass2.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
 
-    # 11. Salvar Arquivo
+    # 11. Apêndice A: Relação Nominal e Coordenadas Geográficas de Todos os Focos
+    doc.add_page_break()
+    
+    add_heading_section(doc, "APÊNDICE A – Relação Nominal e Coordenadas Geográficas dos Focos Detectados")
+    add_body_paragraph(
+        doc,
+        f"A tabela a seguir discrimina a totalidade dos {total_focos} focos de calor registrados "
+        f"no polígono da {nome_uc} durante o período de monitoramento ({periodo_str}), fornecendo "
+        "as coordenadas geodésicas (SIRGAS 2000), o satélite detector, o município de incidência "
+        "e a Potência Radiativa do Fogo (FRP), constituindo subsídio direto para inserção em receptores GPS "
+        "e navegação das equipes de campo:"
+    )
+
+    if not gdf_focos_uc.empty:
+        # Ordenar: mais recentes primeiro
+        df_ord = gdf_focos_uc.copy()
+        if "data_hora_gmt" in df_ord.columns:
+            df_ord["data_sort"] = pd.to_datetime(df_ord["data_hora_gmt"], errors="coerce")
+            df_ord = df_ord.sort_values(by="data_sort", ascending=False)
+            
+        n_rows = len(df_ord) + 1
+        t_apend = doc.add_table(rows=n_rows, cols=7)
+        t_apend.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_apend.autofit = False
+
+        headers_ap = ("Nº", "Data/Hora (GMT)", "Latitude", "Longitude", "Satélite", "FRP (MW)", "Município")
+        col_widths = (Inches(0.4), Inches(1.3), Inches(1.0), Inches(1.0), Inches(1.0), Inches(0.8), Inches(1.1))
+
+        row_h_ap = t_apend.rows[0]
+        for col_idx, h_text in enumerate(headers_ap):
+            cell = row_h_ap.cells[col_idx]
+            cell.width = col_widths[col_idx]
+            set_cell_background(cell, "EAEDED")
+            set_cell_margins(cell, top=60, bottom=60, left=60, right=60)
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.first_line_indent = Cm(0)
+            p.paragraph_format.line_spacing = 1.0
+            r = p.add_run(h_text)
+            r.font.name = "Arial"
+            r.font.size = Pt(8.5)
+            r.bold = True
+
+        for idx, (_, row_f) in enumerate(df_ord.iterrows(), start=1):
+            row_elem = t_apend.rows[idx]
+            
+            # Formatação de data
+            dh = str(row_f.get("data_hora_gmt", ""))
+            try:
+                dt_val = pd.to_datetime(dh)
+                dh_fmt = dt_val.strftime("%d/%m/%Y %H:%M")
+            except Exception:
+                dh_fmt = dh[:16] if len(dh)>=16 else dh
+
+            # Latitude e Longitude
+            lat_val = row_f.geometry.y if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lat", 0.0)
+            lon_val = row_f.geometry.x if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lon", 0.0)
+            lat_fmt = f"{lat_val:.5f}°"
+            lon_fmt = f"{lon_val:.5f}°"
+
+            sat_fmt = str(row_f.get("satelite", "-"))
+            frp_raw = row_f.get("frp", None)
+            try:
+                frp_fmt = f"{float(frp_raw):.1f}" if pd.notnull(frp_raw) and float(frp_raw) > 0 else "-"
+            except Exception:
+                frp_fmt = "-"
+
+            muni_fmt = str(row_f.get("municipio", "-")).title()
+
+            vals_row = (str(idx), dh_fmt, lat_fmt, lon_fmt, sat_fmt, frp_fmt, muni_fmt)
+            
+            bg_color = "FFFFFF" if idx % 2 == 1 else "F9FAFA"
+            
+            for col_idx, val_txt in enumerate(vals_row):
+                cell = row_elem.cells[col_idx]
+                cell.width = col_widths[col_idx]
+                set_cell_background(cell, bg_color)
+                set_cell_margins(cell, top=45, bottom=45, left=50, right=50)
+                p = cell.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in [0, 1, 2, 3, 4, 5] else WD_ALIGN_PARAGRAPH.LEFT
+                p.paragraph_format.first_line_indent = Cm(0)
+                p.paragraph_format.line_spacing = 1.0
+                r = p.add_run(val_txt)
+                r.font.name = "Arial"
+                r.font.size = Pt(8.0)
+                if col_idx == 0:
+                    r.bold = True
+
+    # 12. Salvar Arquivo
     if output_path is None:
         safe_name = nome_uc.replace(" ", "_").replace("/", "-")
         output_path = OUTPUTS_DIR / f"Relatorio_Tecnico_Focos_{safe_name}.docx"
@@ -500,5 +717,5 @@ def build_technical_report_docx(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(output_path))
-    print(f"[OK] Relatório Técnico gerado com sucesso: {output_path}")
+    print(f"[OK] Relatório Técnico Oficial gerado com sucesso: {output_path}")
     return output_path

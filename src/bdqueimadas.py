@@ -282,9 +282,17 @@ def filter_focos_by_polygon(
     if gdf_focos.empty:
         return gdf_focos
         
+    # Garante extração de geometria Shapely unificada, evitando conflito de índices
+    if hasattr(polygon_geom, "unary_union"):
+        geom = polygon_geom.unary_union
+    elif hasattr(polygon_geom, "geometry"):
+        geom = polygon_geom.geometry.unary_union
+    else:
+        geom = polygon_geom
+
     if buffer_meters > 0:
-        poly_series = gpd.GeoSeries([polygon_geom], crs=CRS_GEOGRAFICO).to_crs(CRS_WGS84)
+        poly_series = gpd.GeoSeries([geom], crs=CRS_GEOGRAFICO).to_crs(CRS_WGS84)
         buffered = poly_series.buffer(buffer_meters / 111320.0).iloc[0]
         return gdf_focos[gdf_focos.intersects(buffered)].copy()
         
-    return gdf_focos[gdf_focos.intersects(polygon_geom)].copy()
+    return gdf_focos[gdf_focos.intersects(geom)].copy()
