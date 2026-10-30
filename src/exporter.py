@@ -9,6 +9,7 @@ Exportando em PNG alta resolução (300 DPI) e PDF vetorial para cada versão.
 """
 
 import unicodedata
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List, Union
 import geopandas as gpd
@@ -120,8 +121,9 @@ def find_uc_by_name(nome_uc: str) -> gpd.GeoDataFrame:
 
 def processar_e_exportar_todos_os_mapas(
     nome_uc: str,
-    data_inicio: str = "2025-08-01",
-    data_fim: str = "2025-12-31",
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+    dias_analise: int = 30,
     focos_source: Union[str, Path, ee.FeatureCollection] = "BDQUEIMADAS",
     data_referencia_foco: Optional[str] = None,
     buffer_uc_metros: float = 0.0,
@@ -139,6 +141,13 @@ def processar_e_exportar_todos_os_mapas(
         'BDQUEIMADAS' (padrão): Baixa automaticamente os focos oficiais do INPE/BDQueimadas.
         Ou caminho de arquivo local (.csv, .geojson, .shp) ou asset do GEE.
     """
+    # Janela temporal automática: últimos 30 dias por padrão
+    if data_fim is None:
+        data_fim = date.today().strftime("%Y-%m-%d")
+    if data_inicio is None:
+        dt_f = datetime.strptime(data_fim, "%Y-%m-%d").date()
+        data_inicio = (dt_f - timedelta(days=dias_analise)).strftime("%Y-%m-%d")
+
     print(f"\n=======================================================")
     print(f" Início do Processamento de Focos: {nome_uc}")
     print(f" Período: {data_inicio} até {data_fim}")
