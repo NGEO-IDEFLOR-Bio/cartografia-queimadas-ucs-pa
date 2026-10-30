@@ -36,19 +36,19 @@ Demonstração dos 3 produtos cartográficos gerados automaticamente pelo pipeli
 ### A) Severidade do Fogo — NBR (Normalized Burn Ratio)
 Com escala espectral calibrada para identificação de cicatrizes recentes e máscara hídrica institucional preservando rios e canais em azul profundo (`#1F618D`):
 <p align="center">
-  <img src="docs/img/prancha_severidade_nbr.png" width="95%" alt="Prancha Severidade NBR - RDS Vitória de Souzel" />
+  <img src="demo/prancha_severidade_nbr.png" width="95%" alt="Prancha Severidade NBR - RDS Vitória de Souzel" />
 </p>
 
 ### B) Falsa Cor — Realce de Queimadas (SWIR-NIR-Red: B12, B8, B4)
 Destaque para o contraste nítido entre frentes de queima ativa / solo calcinado e vegetação úmida preservada:
 <p align="center">
-  <img src="docs/img/prancha_falsa_cor.png" width="95%" alt="Prancha Falsa Cor - RDS Vitória de Souzel" />
+  <img src="demo/prancha_falsa_cor.png" width="95%" alt="Prancha Falsa Cor - RDS Vitória de Souzel" />
 </p>
 
 ### C) Cor Natural — Visão de Superfície (RGB: B4, B3, B2)
 Contexto fidedigno da cobertura do solo, relevo e hidrografia do Rio Xingu:
 <p align="center">
-  <img src="docs/img/prancha_cor_natural.png" width="95%" alt="Prancha Cor Natural - RDS Vitória de Souzel" />
+  <img src="demo/prancha_cor_natural.png" width="95%" alt="Prancha Cor Natural - RDS Vitória de Souzel" />
 </p>
 
 ---
@@ -114,8 +114,7 @@ cartografia-queimadas-ucs-pa/
 ├── assets/
 │   ├── img/                 # Logomarcas oficiais (Brasão PA, IDEFLOR-Bio, NGEO)
 │   └── templates/           # Template oficial Word (.docx) com cabeçalho institucional
-├── docs/
-│   └── img/                 # Pranchas em alta resolução para documentação
+├── demo/                    # Pranchas em alta resolução e Relatórios Técnicos (.docx/.pdf) de demonstração
 ├── src/
 │   ├── __init__.py
 │   ├── config.py            # CRS, cores hexadecimais, layout milimétrico e parâmetros orbitais

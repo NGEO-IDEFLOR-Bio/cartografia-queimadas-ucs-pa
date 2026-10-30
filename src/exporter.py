@@ -258,21 +258,28 @@ def processar_e_exportar_todos_os_mapas(
             "titulo": vis_spec["nome"]
         }
         
-    # 6. Gerar Relatório Técnico Oficial (.docx) para Subsídio Imediato à Decisão
+    # 6. Gerar Relatório Técnico Oficial (.docx e .pdf) para Subsídio Imediato à Decisão
     relatorio_path = None
+    relatorio_pdf_path = None
     try:
-        from src.report_generator import build_technical_report_docx
+        from src.report_generator import build_technical_report_docx, convert_docx_to_pdf
         doc_out = OUTPUTS_DIR / f"Relatorio_Tecnico_Focos_{safe_name}.docx"
         build_technical_report_docx(
             nome_uc=uc_real_name,
             periodo_str=periodo_label,
             gdf_focos_uc=gdf_focos_uc,
             metricas=metricas,
+            gdf_uc=gdf_uc,
             output_path=doc_out
         )
         relatorio_path = str(doc_out)
+
+        # Conversão automática para PDF
+        pdf_out = convert_docx_to_pdf(doc_out)
+        if pdf_out:
+            relatorio_pdf_path = str(pdf_out)
     except Exception as e:
-        print(f"[!] Aviso: Não foi possível gerar relatório .docx: {e}")
+        print(f"[!] Aviso: Não foi possível gerar relatório técnico: {e}")
         
     print(f"\n[OK] Sucesso! Todas as 3 pranchas e o Relatório Técnico foram gerados e salvos em: {OUTPUTS_DIR}")
     return {
@@ -280,5 +287,6 @@ def processar_e_exportar_todos_os_mapas(
         "metricas": metricas,
         "pranchas": resultados_exportados,
         "relatorio_docx": relatorio_path,
+        "relatorio_pdf": relatorio_pdf_path,
         "extent": vis_extent
     }

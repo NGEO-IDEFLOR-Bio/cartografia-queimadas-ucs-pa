@@ -12,9 +12,9 @@ venv/
 .ipynb_checkpoints/
 */.ipynb_checkpoints/*
 
-# Outputs pesados gerados localmente
-outputs/*.png
-outputs/*.pdf
+# Outputs gerados em tempo de execução
+outputs/*
+!outputs/.gitkeep
 data/raw/*
 !data/raw/.gitkeep
 

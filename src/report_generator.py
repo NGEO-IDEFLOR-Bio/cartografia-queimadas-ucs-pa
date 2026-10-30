@@ -8,16 +8,19 @@ Especificações Formais e Tipográficas Institucionais:
 - Tipografia: Arial 12 pt no corpo de texto
 - Espaçamento entre linhas: 1,5 linhas
 - Recuo na primeira linha dos parágrafos: exatamente 1,5 cm (Cm(1.5))
-- Listas com tópicos: recuo padronizado de lista institucional
-- Tabelas: estilo Table Grid institucional, fonte Arial 9 pt, zebrado suave
-- Referências: norma ABNT NBR 6023 (alinhamento à esquerda, entrelinhas simples)
+- Listas com tópicos: recuo padronizado (1,5 cm) com marcadores (•) e entrelinhas 1,5
+- Tabelas: estilo Table Grid institucional, fonte Arial, zebrado suave
+- Referências: norma ABNT NBR 6023 (Arial 12 pt, entrelinhas simples, negrito no título da obra)
 - Apêndice A: Tabela completa de localização geográfica (coordenadas SIRGAS 2000)
+- Tom estritamente técnico: subsídio neutro e objetivo para tomada de decisão (sem direcionamento operacional nem linguagem promocional)
 - Contextualização: 100% dinâmica e aderente para qualquer uma das 29 UCs do Pará
 """
 
 import os
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, date
 
 import docx
@@ -85,15 +88,22 @@ def add_topic_item(
     doc: Document,
     prefix_text: str,
     body_text: str,
-    font_size: float = 11.0,
-    space_after: float = 3.0
+    font_size: float = 12.0,
+    space_after: float = 3.0,
+    line_spacing: float = 1.5
 ):
-    """Adiciona item de lista com recuo padronizado e tópicos em Arial."""
+    """
+    Adiciona item de lista/alínea com marcador padronizado segundo ABNT:
+    - Tipografia Arial 12 pt
+    - Recuo à esquerda de 1,5 cm com recuo de primeira linha de -0,5 cm
+    - Espaçamento entrelinhas 1,5
+    - Prefixo em negrito (se houver)
+    """
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.space_before = Pt(1.0)
     p.paragraph_format.space_after = Pt(space_after)
-    p.paragraph_format.line_spacing = 1.3
+    p.paragraph_format.line_spacing = line_spacing
     p.paragraph_format.left_indent = Cm(1.5)
     p.paragraph_format.first_line_indent = -Cm(0.5)
 
@@ -101,36 +111,60 @@ def add_topic_item(
     r_bullet.font.name = "Arial"
     r_bullet.font.size = Pt(font_size)
     r_bullet.bold = True
-    r_bullet.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
+    r_bullet.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
 
     if prefix_text:
         r_pre = p.add_run(f"{prefix_text}: ")
         r_pre.font.name = "Arial"
         r_pre.font.size = Pt(font_size)
         r_pre.bold = True
-        r_pre.font.color.rgb = RGBColor(0x1B, 0x26, 0x31)
+        r_pre.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
 
     r_body = p.add_run(body_text)
     r_body.font.name = "Arial"
     r_body.font.size = Pt(font_size)
-    r_body.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    r_body.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
     return p
 
 
-def add_abnt_reference(doc: Document, text: str):
-    """Adiciona referência no formato ABNT NBR 6023 (alinhamento à esquerda, entrelinhas simples, espaço após)."""
+def add_abnt_reference(doc: Document, autor: str, titulo_obra: str, complemento: str):
+    """
+    Adiciona referência no formato rigoroso da ABNT NBR 6023:
+    - Tipografia Arial 12 pt
+    - Alinhamento à esquerda
+    - Espaçamento entrelinhas simples (1.0)
+    - Separadas entre si por espaço de 1 linha em branco (Pt(12.0))
+    - Título da obra em negrito
+    - Sem recuo na primeira linha (margem zerada)
+    """
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    p.paragraph_format.space_before = Pt(2.0)
-    p.paragraph_format.space_after = Pt(6.0)
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(12.0)
     p.paragraph_format.line_spacing = 1.0
     p.paragraph_format.first_line_indent = Cm(0)
     p.paragraph_format.left_indent = Cm(0)
 
-    run = p.add_run(text)
-    run.font.name = "Arial"
-    run.font.size = Pt(9.5)
-    run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    # Autor / Instituição
+    r_aut = p.add_run(autor + " ")
+    r_aut.font.name = "Arial"
+    r_aut.font.size = Pt(12.0)
+    r_aut.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+
+    # Título da Obra (em NEGRITO, conforme ABNT NBR 6023)
+    r_tit = p.add_run(titulo_obra)
+    r_tit.font.name = "Arial"
+    r_tit.font.size = Pt(12.0)
+    r_tit.bold = True
+    r_tit.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+
+    # Complemento (cidade, editora, data, disponibilidade, acesso)
+    if complemento:
+        comp_str = " " + complemento if not complemento.startswith((".", ",")) else complemento
+        r_comp = p.add_run(comp_str)
+        r_comp.font.name = "Arial"
+        r_comp.font.size = Pt(12.0)
+        r_comp.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
     return p
 
 
@@ -287,8 +321,8 @@ def build_technical_report_docx(
     """
     Gera o Relatório Técnico Oficial do NGEO em formato Microsoft Word (.docx),
     preservando rigorosamente o cabeçalho oficial do IDEFLOR-Bio, a tipografia Arial 12pt,
-    espaçamento 1,5, recuo de 1,5 cm na primeira linha dos parágrafos, tabelas executivas,
-    apêndice com coordenadas dos focos e referências ABNT.
+    espaçamento 1,5, recuo de 1,5 cm na primeira linha dos parágrafos, tópicos padronizados,
+    tabelas executivas, apêndice com coordenadas dos focos e referências ABNT NBR 6023.
     """
     # 1. Carregar Template Matriz com Cabeçalho Institucional
     if FILE_TEMPLATE_RELATORIO.exists():
@@ -333,7 +367,7 @@ def build_technical_report_docx(
     r_sub.bold = True
     r_sub.font.color.rgb = RGBColor(0x2C, 0x3E, 0x50)
 
-    # 3. Seção 1: Identificação do Documento
+    # 3. Seção 1: Identificação do Documento (Tópicos com marcadores padrão ABNT)
     add_heading_section(doc, "1. Identificação do Documento")
     
     data_hoje_extenso = date.today().strftime("%d de %B de %Y")
@@ -346,34 +380,31 @@ def build_technical_report_docx(
         data_hoje_extenso = data_hoje_extenso.replace(en_m, pt_m)
         
     ident_itens = [
-        ("Instrumento Técnico", "Relatório de Monitoramento Operacional de Focos de Queimada"),
-        ("Origem / Metodologia", "Pipeline Integrado de Cartografia de Queimadas em UCs (NGEO / IDEFLOR-Bio)"),
-        ("Responsabilidade Técnica", "Samuel da Costa dos Santos – Coordenador do Núcleo de Geotecnologias (NGEO)"),
-        ("Unidade de Conservação", nome_uc),
-        ("Período de Análise", f"{periodo_str} (Janela dinâmica dos últimos 30 dias)"),
-        ("Data de Emissão", data_hoje_extenso),
+        ("Instrumento Técnico", "Relatório de Monitoramento Operacional de Focos de Queimada;"),
+        ("Origem / Metodologia", "Pipeline de Cartografia de Queimadas em UCs (NGEO / IDEFLOR-Bio);"),
+        ("Responsabilidade Técnica", "Samuel da Costa dos Santos – Coordenador do Núcleo de Geotecnologias (NGEO);"),
+        ("Unidade de Conservação", f"{nome_uc};"),
+        ("Período de Análise", f"{periodo_str} (janela móvel dos últimos 30 dias);"),
+        ("Data de Emissão", f"{data_hoje_extenso}."),
     ]
     for rotulo, val in ident_itens:
-        add_topic_item(doc, rotulo, val, font_size=11.0, space_after=2.5)
+        add_topic_item(doc, rotulo, val, font_size=12.0, space_after=2.5)
 
     # 4. Seção 2: Finalidade e Objetivos
     add_heading_section(doc, "2. Finalidade e Objetivos")
     add_body_paragraph(
         doc,
         "O presente relatório técnico tem por finalidade fornecer subsídios geoespaciais "
-        "rápidos, objetivos e auditados para a tomada de decisão no âmbito da Diretoria de "
-        "Gestão e Monitoramento de Unidades de Conservação (DGMUC), da Diretoria de Fiscalização "
-        "Ambiental da SEMAS e de órgãos operacionais parceiros (Batalhão de Polícia Ambiental e "
-        "Corpo de Bombeiros Militar do Pará)."
+        "objetivos para a tomada de decisão no âmbito da gestão e monitoramento das Unidades "
+        "de Conservação estaduais do Pará."
     )
     add_body_paragraph(
         doc,
-        "O diagnóstico visa a identificar a cronologia, magnitude espacial e intensidade de "
-        "focos de calor detectados no interior da Unidade de Conservação, correlacionando "
-        "os registros do Programa BDQueimadas/INPE com a resposta espectral de severidade do dano "
-        "à vegetação por imagens orbitais Sentinel-2 Harmonized. O documento subsidia o despacho "
-        "tático de brigadas de prevenção e combate a incêndios florestais e orienta rotas "
-        "prioritárias de fiscalização em campo."
+        "O diagnóstico apresenta a cronologia, o quantitativo e a distribuição espacial dos focos "
+        "de calor detectados na Unidade de Conservação pelo Programa BDQueimadas/INPE, correlacionados "
+        "à resposta espectral de severidade do dano à vegetação por imagens orbitais Sentinel-2 "
+        "(Copernicus/ESA). As informações visam a embasar as análises e eventuais medidas a serem adotadas "
+        "pelos setores competentes."
     )
 
     # 5. Seção 3: Contextualização da Área de Estudo (100% Dinâmica para as 29 UCs)
@@ -391,25 +422,21 @@ def build_technical_report_docx(
     
     passos_met = [
         ("Ingestão de Dados Oficiais de Focos",
-         "Conexão direta ao dataserver oficial do INPE (Programa BDQueimadas), recuperando os focos "
-         "diários e mensais detectados por múltiplos sensores orbitais (VIIRS a bordo do NOAA-20, NOAA-21 "
-         "e Suomi-NPP; além do sensor MODIS a bordo do satélite Aqua)."),
+         "Conexão automatizada ao dataserver do INPE (Programa BDQueimadas), recuperando dados diários "
+         "e mensais de sensores orbitais de referência (VIIRS e MODIS);"),
         ("Filtragem Espacial e Segregação Temporal",
-         f"Intersecção topológica exata dos focos com o polígono homologado da {nome_uc} (base DGMUC/IDEFLOR-Bio). "
-         "Segregação temporal entre focos do dia atual / última observação recente e focos acumulados anteriores, "
-         "permitindo diferenciar frentes de queima ativas de cicatrizes já estabelecidas."),
-        ("Sensoriamento Remoto Orbital e Cálculo Espectral (Sentinel-2 Harmonized)",
-         "Processamento em nuvem no Google Earth Engine (GEE) de imagens orbitais Sentinel-2 "
-         "com aplicação de máscaras de nuvens e cirrus (SCL classes 4, 5, 6 e QA60). Geração do índice "
-         "Normalized Burn Ratio (NBR = (B8 - B12) / (B8 + B12)) com preservação estrita de corpos d'água "
-         "via NDWI > 0, eliminando ruídos térmicos em drenagens e rios."),
+         f"Intersecção espacial dos focos com a poligonal homologada da {nome_uc} (base DGMUC/IDEFLOR-Bio), "
+         "segregando os registros do dia mais recente em relação ao acumulado do período;"),
+        ("Processamento Orbital e Cálculo Espectral (Sentinel-2 Harmonized)",
+         "Processamento em nuvem no Google Earth Engine (GEE) de imagens Sentinel-2 com aplicação de máscaras "
+         "de nuvens e cálculo do índice Normalized Burn Ratio (NBR), resguardando corpos hídricos via máscara espectral;"),
         ("Diagramação Cartográfica Institucional",
-         "Geração automatizada de pranchas em formato A4 Paisagem (297 x 210 mm) em alta resolução "
-         "(300 DPI) em 3 escalas integradas: Detalhe da UC com mosaico orbital, Contexto Regional da Unidade "
-         "e Macroestadual no Pará, conforme o padrão oficial do NGEO.")
+         "Geração automatizada de pranchas em formato A4 Paisagem (297 x 210 mm) em alta resolução (300 DPI) "
+         "estruturadas em três escalas integradas: Detalhe da UC com mosaico orbital, Contexto Regional da Unidade "
+         "e Localização Macroestadual no Pará.")
     ]
     for rotulo, desc in passos_met:
-        add_topic_item(doc, rotulo, desc, font_size=11.0, space_after=3.5)
+        add_topic_item(doc, rotulo, desc, font_size=12.0, space_after=3.5)
 
     # 7. Seção 5: Resultados e Diagnóstico Espacial
     add_heading_section(doc, "5. Resultados e Diagnóstico Espacial")
@@ -423,8 +450,8 @@ def build_technical_report_docx(
         doc,
         f"No período avaliado ({periodo_str}), foram contabilizados {total_focos} focos de calor incidentes "
         f"no interior da {nome_uc}. Desse montante, {recentes_focos} ocorrência(s) correspondem "
-        f"ao registro mais recente do monitoramento ({data_rec}), indicando potencial queima em andamento "
-        f"ou brasa residual, enquanto {anteriores_focos} focos referem-se ao acúmulo histórico ao longo dos dias anteriores."
+        f"ao registro mais recente do monitoramento ({data_rec}), enquanto {anteriores_focos} focos "
+        "referem-se ao acúmulo histórico ao longo dos dias anteriores."
     )
     
     add_heading_section(doc, "5.1 Síntese Quantitativa dos Focos de Queimada", is_main=False)
@@ -438,8 +465,8 @@ def build_technical_report_docx(
         ("Parâmetro de Monitoramento", "Indicador Registrado"),
         ("Unidade de Conservação Estadual", nome_uc),
         ("Total de Ocorrências no Período", f"{total_focos} focos de calor"),
-        (f"Focos no Dia Mais Recente ({data_rec})", f"{recentes_focos} focos (Frente ativa)"),
-        ("Focos Acumulados em Dias Anteriores", f"{anteriores_focos} focos (Cicatrizes / Histórico)"),
+        (f"Focos no Dia Mais Recente ({data_rec})", f"{recentes_focos} focos"),
+        ("Focos Acumulados em Dias Anteriores", f"{anteriores_focos} focos"),
     ]
     for row_idx, (c0, c1) in enumerate(t1_data):
         row = table1.rows[row_idx]
@@ -455,7 +482,7 @@ def build_technical_report_docx(
         p0.paragraph_format.line_spacing = 1.15
         r0 = p0.add_run(c0)
         r0.font.name = "Arial"
-        r0.font.size = Pt(9.5)
+        r0.font.size = Pt(10.0)
         
         p1 = cell1.paragraphs[0]
         p1.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -463,7 +490,7 @@ def build_technical_report_docx(
         p1.paragraph_format.line_spacing = 1.15
         r1 = p1.add_run(c1)
         r1.font.name = "Arial"
-        r1.font.size = Pt(9.5)
+        r1.font.size = Pt(10.0)
         
         if row_idx == 0:
             set_cell_background(cell0, "EAEDED")
@@ -525,73 +552,65 @@ def build_technical_report_docx(
     p_espaco2.paragraph_format.space_before = Pt(3)
     p_espaco2.paragraph_format.space_after = Pt(3)
 
-    # 5.3 Pranchas Cartográficas Geradas
-    add_heading_section(doc, "5.3 Pranchas Cartográficas Oficiais Anexas", is_main=False)
+    # 5.3 Pranchas Cartográficas Geradas (Apresentação direta conforme orientação do usuário)
+    add_heading_section(doc, "5.3 Pranchas Cartográficas Anexas", is_main=False)
     add_body_paragraph(
         doc,
-        "Como produto cartográfico de alta fidelidade técnica, foram geradas 3 (três) pranchas "
-        "oficiais padronizadas em alta resolução (300 DPI) para subsidiar a análise visual dos "
-        "gestores e embasar despachos administrativos:"
+        "Constituem produtos cartográficos integrantes deste relatório as seguintes pranchas "
+        "técnicas em formato A4 Paisagem:"
     )
     
-    pranchas_desc = [
-        ("Prancha em Cor Natural (RGB: B4, B3, B2)",
-         "Apresenta a visualização real da cobertura do solo e do relevo, permitindo contextualizar "
-         "a proximidade dos focos em relação à malha hidrográfica e ocupações consolidadas."),
-        ("Prancha em Falsa Cor (Realce Queimadas: B12, B8, B4)",
-         "Composição no espectro do infravermelho de ondas curtas (SWIR), que proporciona contraste "
-         "máximo entre cicatrizes calcinadas (tonalidades avermelhadas/marrom-escuras) e o dossel "
-         "vegetal vivo preservado (verde brilhante)."),
-        ("Prancha de Severidade do Fogo — NBR (Normalized Burn Ratio)",
-         "Mapeamento quantitativo do impacto na vegetação. A rampa cromática destaca frentes ativas e áreas "
-         "de alta severidade (< -0.15) em tons vermelhos e vinhos, áreas moderadas em laranja, solo/pastagem "
-         "em amarelo e floresta preservada em verde escuro, mantendo corpos d'água resguardados em azul.")
+    pranchas_lista = [
+        ("Composição em Cor Natural (RGB 432)", "Imagem Sentinel-2 no espectro visível (Bandas B4, B3 e B2);"),
+        ("Composição em Falsa Cor (RGB 12-8-4)", "Imagem Sentinel-2 no infravermelho de ondas curtas, infravermelho próximo e vermelho (Bandas B12, B8 e B4);"),
+        ("Índice de Severidade do Fogo (NBR)", "Produto derivado do cálculo normalizado entre as bandas do infravermelho próximo (B8) e infravermelho de ondas curtas (B12).")
     ]
-    for t_pran, d_pran in pranchas_desc:
-        add_topic_item(doc, t_pran, d_pran, font_size=11.0, space_after=3.5)
+    for t_pran, d_pran in pranchas_lista:
+        add_topic_item(doc, t_pran, d_pran, font_size=12.0, space_after=3.0)
 
-    # 8. Seção 6: Conclusões e Recomendações para Tomada de Decisão
-    add_heading_section(doc, "6. Conclusões e Recomendações para Tomada de Decisão")
+    # 8. Seção 6: Considerações Finais (Sem direcionamento de medidas operacionais)
+    add_heading_section(doc, "6. Considerações Finais")
     add_body_paragraph(
         doc,
-        f"A análise espacial integrada dos {total_focos} focos de calor registrados na {nome_uc} "
-        "revela um padrão de agrupamento com proximidade a limites de transição de cobertura vegetal. "
-        f"A presença de {recentes_focos} foco(s) na data mais recente ({data_rec}) aponta para atividade de queima "
-        "recente que requer verificação imediata para prevenir alastramento a maciços florestais contíguos."
+        f"A espacialização dos dados registrou um total de {total_focos} focos de calor no interior da "
+        f"{nome_uc} durante o período de {periodo_str}, dos quais {recentes_focos} ocorrência(s) correspondem "
+        f"à observação mais recente ({data_rec}) e {anteriores_focos} aos registros acumulados nos dias anteriores."
     )
     add_body_paragraph(
         doc,
-        "Diante do diagnóstico operacional, recomendam-se as seguintes medidas táticas prioritárias:"
-    )
-    
-    rec_itens = [
-        "Despacho prioritário de brigadas florestais e equipes do Batalhão de Polícia Ambiental para averiguação dos focos recentes na unidade;",
-        "Utilização das coordenadas geográficas tabuladas no Apêndice A para traçado de rotas táticas de fiscalização fluvial e terrestre;",
-        "Articulação interinstitucional com o Corpo de Bombeiros Militar para contingência preventiva na hipótese de propagação de fogo em vegetação nativa."
-    ]
-    for r_txt in rec_itens:
-        add_topic_item(doc, "", r_txt, font_size=11.0, space_after=3.0)
-
-    add_body_paragraph(
-        doc,
-        "As 3 (três) pranchas cartográficas institucionais padronizadas seguem anexas ao processo "
-        "em formato PDF. Informa-se, ademais, que a base vetorial georreferenciada dos focos "
-        "(arquivos Shapefile e GeoPackage com atributos de FRP, satélite e coordenadas) encontra-se "
-        "disponível para envio imediato via correio eletrônico institucional (ngeo@ideflorbio.pa.gov.br) "
-        "para carregamento direto em equipamentos de navegação das equipes de campo."
+        "O presente documento, acompanhado das 3 (três) pranchas cartográficas oficiais e da tabela "
+        "nominal de coordenadas geodésicas (SIRGAS 2000) discriminada no Apêndice A, fornece o subsídio "
+        "espacial para fundamentar a avaliação e as decisões a serem adotadas pelos setores competentes."
     )
 
-    # 9. Seção 7: Referências Bibliográficas e Fontes de Dados (Formato ABNT NBR 6023)
+    # 9. Seção 7: Referências e Fontes de Dados (Formato ABNT NBR 6023 com negrito no título da obra)
     add_heading_section(doc, "7. Referências e Fontes de Dados")
     
-    refs = [
-        "BRASIL. Instituto Nacional de Pesquisas Espaciais (INPE). Programa Queimadas: BDQueimadas – Banco de Dados de Queimadas. São José dos Campos: INPE, 2026. Disponível em: <https://queimadas.dgi.inpe.br/>. Acesso em: 30 out. 2026.",
-        "EUROPEAN SPACE AGENCY (ESA). Copernicus Sentinel-2: Multispectral Instrument (MSI) Harmonized Level-2A Surface Reflectance. Processamento digital em nuvem via Google Earth Engine. Paris: ESA, 2026.",
-        "INSTITUTO BRASILEIRO DE GEOGRAFIA E ESTATÍSTICA (IBGE). Resolução nº 1, de 25 de fevereiro de 2005. Estabelece a adoção do Sistema de Referência Geocêntrico para as Américas (SIRGAS 2000 / EPSG:4674) como o novo referencial geodésico oficial brasileiro. Rio de Janeiro: IBGE, 2005.",
-        "PARÁ. Instituto de Desenvolvimento Florestal e da Biodiversidade do Estado do Pará (IDEFLOR-Bio). Base Cartográfica Oficial das Unidades de Conservação Estaduais do Pará. Belém: DGMUC/NGEO, 2026."
+    refs: List[Tuple[str, str, str]] = [
+        (
+            "BRASIL. Instituto Nacional de Pesquisas Espaciais (INPE).",
+            "Programa Queimadas: BDQueimadas – Banco de Dados de Queimadas.",
+            "São José dos Campos: INPE, 2026. Disponível em: https://queimadas.dgi.inpe.br/. Acesso em: 30 out. 2026."
+        ),
+        (
+            "EUROPEAN SPACE AGENCY (ESA).",
+            "Copernicus Sentinel-2: Multispectral Instrument (MSI) Harmonized Level-2A Surface Reflectance.",
+            "Paris: ESA, 2026."
+        ),
+        (
+            "INSTITUTO BRASILEIRO DE GEOGRAFIA E ESTATÍSTICA (IBGE).",
+            "Resolução nº 1, de 25 de fevereiro de 2005.",
+            "Estabelece a adoção do Sistema de Referência Geocêntrico para as Américas (SIRGAS 2000 / EPSG:4674) como o novo referencial geodésico oficial brasileiro. Rio de Janeiro: IBGE, 2005."
+        ),
+        (
+            "PARÁ. Instituto de Desenvolvimento Florestal e da Biodiversidade do Estado do Pará (IDEFLOR-Bio).",
+            "Base Cartográfica Oficial das Unidades de Conservação Estaduais do Pará.",
+            "Belém: DGMUC/NGEO, 2026."
+        )
     ]
-    for ref_t in refs:
-        add_abnt_reference(doc, ref_t)
+    
+    for autor_ref, titulo_ref, comp_ref in refs:
+        add_abnt_reference(doc, autor_ref, titulo_ref, comp_ref)
 
     # 10. Assinatura Institucional
     p_ass_espaco = doc.add_paragraph()
@@ -630,8 +649,7 @@ def build_technical_report_docx(
         f"A tabela a seguir discrimina a totalidade dos {total_focos} focos de calor registrados "
         f"no polígono da {nome_uc} durante o período de monitoramento ({periodo_str}), fornecendo "
         "as coordenadas geodésicas (SIRGAS 2000), o satélite detector, o município de incidência "
-        "e a Potência Radiativa do Fogo (FRP), constituindo subsídio direto para inserção em receptores GPS "
-        "e navegação das equipes de campo:"
+        "e a Potência Radiativa do Fogo (FRP):"
     )
 
     if not gdf_focos_uc.empty:
@@ -719,3 +737,78 @@ def build_technical_report_docx(
     doc.save(str(output_path))
     print(f"[OK] Relatório Técnico Oficial gerado com sucesso: {output_path}")
     return output_path
+
+
+def convert_docx_to_pdf(docx_path: Path, output_pdf_path: Optional[Path] = None) -> Optional[Path]:
+    """
+    Converte documento Word (.docx) para PDF mantendo fidelidade visual absoluta.
+    Suporta:
+    1. LibreOffice / soffice (Linux, Google Colab, macOS, Windows com LibreOffice instalado)
+    2. Microsoft Word via COM (Windows)
+    3. docx2pdf (se instalado)
+    """
+    docx_path = Path(docx_path).resolve()
+    if not docx_path.exists():
+        return None
+        
+    if output_pdf_path is None:
+        output_pdf_path = docx_path.with_suffix(".pdf")
+    else:
+        output_pdf_path = Path(output_pdf_path).resolve()
+
+    # Tentativa 1: LibreOffice / soffice (padrão em ambientes Linux / Colab / headless)
+    soffice_cmd = None
+    for cmd in ["libreoffice", "soffice"]:
+        if shutil.which(cmd):
+            soffice_cmd = cmd
+            break
+            
+    if soffice_cmd:
+        try:
+            out_dir = output_pdf_path.parent
+            res = subprocess.run(
+                [soffice_cmd, "--headless", "--convert-to", "pdf:writer_pdf_Export", str(docx_path), "--outdir", str(out_dir)],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            expected_pdf = out_dir / (docx_path.stem + ".pdf")
+            if expected_pdf.exists():
+                if expected_pdf != output_pdf_path:
+                    shutil.move(str(expected_pdf), str(output_pdf_path))
+                print(f"[OK] Relatório PDF gerado via LibreOffice: {output_pdf_path}")
+                return output_pdf_path
+        except Exception as e:
+            print(f"[!] Aviso: Falha na conversão via LibreOffice: {e}")
+
+    # Tentativa 2: MS Word COM Automation (Windows)
+    if os.name == "nt":
+        try:
+            import win32com.client
+            import pythoncom
+            pythoncom.CoInitialize()
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            word.DisplayAlerts = False
+            doc = word.Documents.Open(str(docx_path))
+            doc.SaveAs(str(output_pdf_path), FileFormat=17)  # 17 = wdFormatPDF
+            doc.Close(False)
+            word.Quit()
+            if output_pdf_path.exists():
+                print(f"[OK] Relatório PDF gerado via Word COM: {output_pdf_path}")
+                return output_pdf_path
+        except Exception as e:
+            print(f"[!] Aviso: Falha na conversão via Word COM: {e}")
+
+    # Tentativa 3: docx2pdf (se instalado)
+    try:
+        from docx2pdf import convert
+        convert(str(docx_path), str(output_pdf_path))
+        if output_pdf_path.exists():
+            print(f"[OK] Relatório PDF gerado via docx2pdf: {output_pdf_path}")
+            return output_pdf_path
+    except Exception:
+        pass
+
+    print("[!] Aviso: Não foi possível converter .docx para .pdf automaticamente (requer LibreOffice ou Word). O arquivo .docx permanece disponível.")
+    return None
