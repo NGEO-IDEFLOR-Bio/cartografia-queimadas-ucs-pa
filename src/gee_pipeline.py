@@ -165,7 +165,11 @@ def fetch_rendered_basemap(
     xmin, ymin, xmax, ymax = extent_bbox
     region = ee.Geometry.Rectangle([xmin, ymin, xmax, ymax], proj="EPSG:4326", geodesic=False)
     
-    vis_img = image.visualize(**vis_params)
+    # Filtrar apenas parâmetros aceitos por ee.Image.visualize()
+    valid_vis_keys = {"bands", "gain", "bias", "min", "max", "gamma", "palette", "opacity", "forceRgbOutput"}
+    clean_vis = {k: v for k, v in vis_params.items() if k in valid_vis_keys}
+    
+    vis_img = image.visualize(**clean_vis)
     
     url = vis_img.getThumbURL({
         "region": region,
