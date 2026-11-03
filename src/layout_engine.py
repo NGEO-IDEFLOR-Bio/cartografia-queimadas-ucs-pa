@@ -234,10 +234,14 @@ def render_mapa_prancha(
     else:
         ax_main.set_facecolor("#EDF2F4")
         
-    # Limite da UC no mapa principal (verde neon com halo florestal escuro)
+    # Limite da UC no mapa principal (ajuste dinâmico: #FFB700 para Falsa Cor, #00FF66 para demais)
+    is_falsa_cor = "falsa" in tipo_basemap.lower()
+    cor_uc_main = "#FFB700" if is_falsa_cor else "#00FF66"
+    cor_uc_halo = "#5D3E00" if is_falsa_cor else "#004D20"
+
     if not gdf_uc.empty:
-        gdf_uc.boundary.plot(ax=ax_main, edgecolor="#00FF66", linewidth=2.0, zorder=20)
-        gdf_uc.boundary.plot(ax=ax_main, edgecolor="#004D20", linewidth=3.2, alpha=0.7, zorder=19)
+        gdf_uc.boundary.plot(ax=ax_main, edgecolor=cor_uc_main, linewidth=2.0, zorder=20)
+        gdf_uc.boundary.plot(ax=ax_main, edgecolor=cor_uc_halo, linewidth=3.2, alpha=0.7, zorder=19)
         
     # Focos de Queimadas (Triângulos)
     if not gdf_anteriores.empty:
@@ -504,7 +508,7 @@ def render_mapa_prancha(
                    markerfacecolor=FOCOS_RECENTES_FILL, markeredgecolor=FOCOS_RECENTES_STROKE, markersize=8, markeredgewidth=1.2)
     h_ant = Line2D([0], [0], marker="^", color="w", label=f"Focos Dias Anteriores – {n_anteriores} focos",
                    markerfacecolor=FOCOS_ANTERIORES_FILL, markeredgecolor=FOCOS_ANTERIORES_STROKE, markersize=7, markeredgewidth=1.0)
-    h_uc = Line2D([0, 1], [0, 0], color="#00FF66", linestyle="--", linewidth=2.0, label=f"Limite Oficial da {short_uc_name}")
+    h_uc = Line2D([0, 1], [0, 0], color=cor_uc_main, linestyle="--", linewidth=2.0, label=f"Limite Oficial da {short_uc_name}")
     h_pa = mpatches.Patch(facecolor="#D5F5E3", edgecolor="#1E8449", linewidth=1.0, label="Limite do Estado do Pará (Contexto Regional)")
     
     ax_leg.legend(
