@@ -16,9 +16,9 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
 
 * **Download 100% Automático do BDQueimadas / INPE:** Elimina qualquer necessidade de baixar arquivos manualmente ou fazer upload de assets no Earth Engine. O pipeline se conecta diretamente ao dataserver oficial do INPE (`dataserver-coids.inpe.br`), baixando em segundos os focos diários ou mensais para o Estado do Pará, com cache local inteligente em `data/raw/`.
 * **Execução em Nuvem (Google Colab):** Todo o pipeline pode ser executado de qualquer lugar, a qualquer hora, para qualquer UC, através de um notebook leve orquestrador (`notebooks/colab_runner.ipynb`) com autenticação interativa nativa do GEE.
-* **Simbologia Padronizada dos Focos de Queimada:**
-  - **Focos de Dias Anteriores:** Marcadores triangulares (`▲`) com preenchimento em amarelo vibrante (`#FAFF39`) e contorno bronze queimado (`#B35C15`).
-  - **Focos do Dia Atual / Última Observação:** Marcadores triangulares (`▲`) com preenchimento em vermelho alerta (`#DB1E2A`) e contorno bordô escuro (`#801119`).
+* **Simbologia Padronizada e Classificação Temporal Efetiva (Corte 48h):**
+  - **Focos Pretéritos no Período:** Marcadores triangulares (`▲`) com preenchimento em amarelo vibrante (`#FAFF39`) e contorno bronze queimado (`#B35C15`).
+  - **Focos Ativos Recentes (< 48h):** Marcadores triangulares (`▲`) com preenchimento em vermelho alerta (`#DB1E2A`) e contorno bordô escuro (`#801119`). Se a última observação ocorreu há mais de 48 horas (ex: dias ou semanas atrás), o mapa opera no modo "Mapa Frio" (sem triângulos vermelhos alarmantes, com badge explicativo de status e legenda consolidada).
 * **Três Variantes Cartográficas Automáticas:**
   1. **Falsa Cor (SWIR-NIR-Red: B12, B8, B4):** Realce máximo de frentes de fogo e cicatrizes recentes.
   2. **Cor Natural (RGB: B4, B3, B2):** Visão limpa de relevo e vegetação.

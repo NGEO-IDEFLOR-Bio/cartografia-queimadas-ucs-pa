@@ -259,6 +259,31 @@ def render_mapa_prancha(
             zorder=35
         )
         
+    # Badge Informativo de Status Temporal no Mapa Principal (Abordagem B: Corte Seco 48h)
+    tem_recente = metricas.get("tem_foco_recente", False) if metricas else (not gdf_recentes.empty)
+    data_rec = metricas.get("data_ultima_observacao", "") if metricas else ""
+    dias_diff = metricas.get("dias_desde_ultimo") if metricas else None
+    
+    if not tem_recente and not gdf_anteriores.empty:
+        dias_txt = f"há {dias_diff} dias" if (dias_diff is not None and dias_diff > 0) else "mais de 48h"
+        ax_main.text(
+            0.02, 0.97,
+            f"STATUS: SEM FOCOS ATIVOS NAS ÚLTIMAS 48H\nÚltima detecção em {data_rec} ({dias_txt}) – Focos pretéritos consolidados",
+            transform=ax_main.transAxes, ha="left", va="top",
+            fontsize=6.2, fontweight="bold", color="#FFFFFF",
+            bbox=dict(boxstyle="square,pad=0.35", facecolor="#1B2631", edgecolor="#34495E", alpha=0.88, linewidth=0.7),
+            zorder=45
+        )
+    elif tem_recente and not gdf_recentes.empty:
+        ax_main.text(
+            0.02, 0.97,
+            f"STATUS: ALERTA DE FOCOS ATIVOS RECENTES (< 48H)\nDetecção recente em {data_rec} – {len(gdf_recentes)} foco(s) com alta prioridade operacional",
+            transform=ax_main.transAxes, ha="left", va="top",
+            fontsize=6.2, fontweight="bold", color="#FFFFFF",
+            bbox=dict(boxstyle="square,pad=0.35", facecolor="#922B21", edgecolor="#641E16", alpha=0.90, linewidth=0.7),
+            zorder=45
+        )
+        
     # Grade de Coordenadas do Mapa Principal
     span_x = xmax - xmin
     grid_step = 0.05 if span_x < 0.25 else (0.10 if span_x < 0.6 else (0.20 if span_x < 1.2 else 0.50))
@@ -502,20 +527,49 @@ def render_mapa_prancha(
     n_recentes = len(gdf_recentes)
     n_anteriores = len(gdf_anteriores)
     data_rec = metricas.get("data_ultima_observacao", "Último dia") if metricas else "Dia Atual"
+    tem_recente = metricas.get("tem_foco_recente", False) if metricas else (n_recentes > 0)
     
-    # Handles estilizados da legenda
-    h_rec = Line2D([0], [0], marker="^", color="w", label=f"Foco Atual / Última Obs. ({data_rec}) – {n_recentes} focos",
-                   markerfacecolor=FOCOS_RECENTES_FILL, markeredgecolor=FOCOS_RECENTES_STROKE, markersize=8, markeredgewidth=1.2)
-    h_ant = Line2D([0], [0], marker="^", color="w", label=f"Focos Dias Anteriores – {n_anteriores} focos",
-                   markerfacecolor=FOCOS_ANTERIORES_FILL, markeredgecolor=FOCOS_ANTERIORES_STROKE, markersize=7, markeredgewidth=1.0)
+    # Handles estilizados da legenda adaptados à Abordagem B
+    handles = []
+    
+    if tem_recente and n_recentes > 0:
+        h_rec = Line2D([0], [0], marker="^", color="w",
+                       label=f"Foco Ativo / Recente (< 48h - {data_rec}) – {n_recentes} focos",
+                       markerfacecolor=FOCOS_RECENTES_FILL, markeredgecolor=FOCOS_RECENTES_STROKE,
+                       markersize=8, markeredgewidth=1.2)
+        h_ant = Line2D([0], [0], marker="^", color="w",
+                       label=f"Focos Pretéritos no Período – {n_anteriores} focos",
+                       markerfacecolor=FOCOS_ANTERIORES_FILL, markeredgecolor=FOCOS_ANTERIORES_STROKE,
+                       markersize=7, markeredgewidth=1.0)
+        handles.extend([h_rec, h_ant])
+    elif n_anteriores > 0:
+        # Mapa Frio: sem alarme falso de foco atual
+        h_tot = Line2D([0], [0], marker="^", color="w",
+                       label=f"Focos Registrados no Período – {n_anteriores} focos",
+                       markerfacecolor=FOCOS_ANTERIORES_FILL, markeredgecolor=FOCOS_ANTERIORES_STROKE,
+                       markersize=7.5, markeredgewidth=1.0)
+        handles.append(h_tot)
+    else:
+        h_none = Line2D([0], [0], marker="None", color="none", label="Sem registros de focos no período")
+        handles.append(h_none)
+        
     h_uc = Line2D([0, 1], [0, 0], color=cor_uc_main, linestyle="--", linewidth=2.0, label=f"Limite Oficial da {short_uc_name}")
     h_pa = mpatches.Patch(facecolor="#D5F5E3", edgecolor="#1E8449", linewidth=1.0, label="Limite do Estado do Pará (Contexto Regional)")
+    handles.extend([h_uc, h_pa])
     
     ax_leg.legend(
-        handles=[h_rec, h_ant, h_uc, h_pa],
+        handles=handles,
         loc="center left", bbox_to_anchor=(0.02, 0.42),
         frameon=False, fontsize=6.8, handletextpad=0.8, labelspacing=0.4
     )
+    
+    # Se mapa frio, acrescenta nota de status na legenda
+    if not tem_recente and n_anteriores > 0:
+        dias_info = f"há {metricas.get('dias_desde_ultimo')} dias" if metricas and metricas.get('dias_desde_ultimo') else "mais de 48h"
+        ax_leg.text(
+            0.04, 0.10, f"* Sem focos ativos nas últimas 48h (último registro {dias_info}).",
+            transform=ax_leg.transAxes, fontsize=5.6, fontstyle="italic", color="#5D6D7E"
+        )
     
     # 7. Bloco Inferior Esquerdo: Metadados e Fontes Cartográficas (rec_fonte)
     f_rect = LAYOUT_ITEMS["rec_fonte"]

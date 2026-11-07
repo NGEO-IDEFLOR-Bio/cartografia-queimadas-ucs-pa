@@ -445,14 +445,25 @@ def build_technical_report_docx(
     recentes_focos = metricas.get("recentes", 0)
     anteriores_focos = metricas.get("anteriores", 0)
     data_rec = metricas.get("data_ultima_observacao", "Recente")
+    tem_recente = metricas.get("tem_foco_recente", False)
+    dias_diff = metricas.get("dias_desde_ultimo")
     
-    add_body_paragraph(
-        doc,
-        f"No período avaliado ({periodo_str}), foram contabilizados {total_focos} focos de calor incidentes "
-        f"no interior da {nome_uc}. Desse montante, {recentes_focos} ocorrência(s) correspondem "
-        f"ao registro mais recente do monitoramento ({data_rec}), enquanto {anteriores_focos} focos "
-        "referem-se ao acúmulo histórico ao longo dos dias anteriores."
-    )
+    if tem_recente and recentes_focos > 0:
+        texto_resultado = (
+            f"No período avaliado ({periodo_str}), foram contabilizados {total_focos} focos de calor incidentes "
+            f"no interior da {nome_uc}. Desse montante, {recentes_focos} ocorrência(s) correspondem "
+            f"a focos ativos recentes detectados nas últimas 48 horas ({data_rec}), configurando prioridade operacional imediata, "
+            f"enquanto {anteriores_focos} focos referem-se ao acúmulo pretérito ao longo dos dias anteriores."
+        )
+    else:
+        dias_txt = f" (há {dias_diff} dias da data de referência)" if (dias_diff is not None and dias_diff > 0) else ""
+        texto_resultado = (
+            f"No período avaliado ({periodo_str}), foram contabilizados {total_focos} focos de calor incidentes "
+            f"no interior da {nome_uc}. Constata-se a inexistência de focos de calor ativos nas últimas 48 horas, "
+            f"sendo a totalidade das ocorrências caracterizada como registros pretéritos já consolidados, com a última "
+            f"detecção orbital registrada em {data_rec}{dias_txt}."
+        )
+    add_body_paragraph(doc, texto_resultado)
     
     add_heading_section(doc, "5.1 Síntese Quantitativa dos Focos de Queimada", is_main=False)
     
@@ -461,12 +472,23 @@ def build_technical_report_docx(
     table1.alignment = WD_TABLE_ALIGNMENT.CENTER
     table1.autofit = False
     
+    if tem_recente and recentes_focos > 0:
+        item_recente_label = f"Focos Ativos Recentes (< 48h - {data_rec})"
+        item_recente_val = f"{recentes_focos} focos"
+        item_ant_label = "Focos Pretéritos em Dias Anteriores"
+        item_ant_val = f"{anteriores_focos} focos"
+    else:
+        item_recente_label = "Status Operacional (< 48h)"
+        item_recente_val = "Sem focos ativos recentes"
+        item_ant_label = f"Focos Registrados no Período (Último: {data_rec})"
+        item_ant_val = f"{total_focos} focos"
+    
     t1_data = [
         ("Parâmetro de Monitoramento", "Indicador Registrado"),
         ("Unidade de Conservação Estadual", nome_uc),
         ("Total de Ocorrências no Período", f"{total_focos} focos de calor"),
-        (f"Focos no Dia Mais Recente ({data_rec})", f"{recentes_focos} focos"),
-        ("Focos Acumulados em Dias Anteriores", f"{anteriores_focos} focos"),
+        (item_recente_label, item_recente_val),
+        (item_ant_label, item_ant_val),
     ]
     for row_idx, (c0, c1) in enumerate(t1_data):
         row = table1.rows[row_idx]
@@ -570,12 +592,21 @@ def build_technical_report_docx(
 
     # 8. Seção 6: Considerações Finais (Sem direcionamento de medidas operacionais)
     add_heading_section(doc, "6. Considerações Finais")
-    add_body_paragraph(
-        doc,
-        f"A espacialização dos dados registrou um total de {total_focos} focos de calor no interior da "
-        f"{nome_uc} durante o período de {periodo_str}, dos quais {recentes_focos} ocorrência(s) correspondem "
-        f"à observação mais recente ({data_rec}) e {anteriores_focos} aos registros acumulados nos dias anteriores."
-    )
+    if tem_recente and recentes_focos > 0:
+        texto_cons = (
+            f"A espacialização dos dados registrou um total de {total_focos} focos de calor no interior da "
+            f"{nome_uc} durante o período de {periodo_str}, dos quais {recentes_focos} ocorrência(s) correspondem "
+            f"a focos ativos recentes (< 48h - {data_rec}) e {anteriores_focos} aos registros pretéritos acumulados."
+        )
+    else:
+        dias_info_c = f" (ocorrido há {dias_diff} dias da data de referência)" if (dias_diff is not None and dias_diff > 0) else ""
+        texto_cons = (
+            f"A espacialização dos dados registrou um total de {total_focos} focos de calor no interior da "
+            f"{nome_uc} durante o período de {periodo_str}. Destaca-se a ausência de focos de calor ativos "
+            f"nas últimas 48 horas, sendo a totalidade dos registros referente a eventos pretéritos com última detecção "
+            f"em {data_rec}{dias_info_c}."
+        )
+    add_body_paragraph(doc, texto_cons)
     add_body_paragraph(
         doc,
         "O presente documento, acompanhado das 3 (três) pranchas cartográficas oficiais e da tabela "

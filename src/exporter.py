@@ -199,11 +199,19 @@ def processar_e_exportar_todos_os_mapas(
             
     # Filtro espacial no polígono da UC
     gdf_focos_uc = filter_focos_by_polygon(gdf_focos, uc_poly, buffer_meters=buffer_uc_metros)
-    gdf_anteriores, gdf_recentes, metricas = classify_focos_by_date(gdf_focos_uc, data_referencia=data_referencia_foco)
+    dt_referencia = data_referencia_foco or data_fim
+    gdf_anteriores, gdf_recentes, metricas = classify_focos_by_date(
+        gdf_focos_uc, data_referencia=dt_referencia, limiar_dias_recente=2
+    )
     
     print(f"[OK] Total de focos na UC: {metricas['total']}")
-    print(f"  • Dia atual / Última obs. ({metricas['data_ultima_observacao']}): {metricas['recentes']}")
-    print(f"  • Dias anteriores: {metricas['anteriores']}")
+    if metricas.get("tem_foco_recente"):
+        print(f"  • [MAPA QUENTE] Focos ativos recentes (< 48h - {metricas['data_ultima_observacao']}): {metricas['recentes']}")
+        print(f"  • Focos pretéritos anteriores: {metricas['anteriores']}")
+    else:
+        dias_info = f" (último registro há {metricas['dias_desde_ultimo']} dias)" if metricas.get("dias_desde_ultimo") is not None else ""
+        print(f"  • [MAPA FRIO] Sem focos ativos nas últimas 48h{dias_info}.")
+        print(f"  • Focos acumulados no período: {metricas['anteriores']} (Último registro em {metricas['data_ultima_observacao']})")
     
     # 5. Gerar as 3 Variantes de Mapa (Falsa Cor, Cor Natural, NBR)
     safe_name = uc_real_name.replace(" ", "_").replace("/", "-")

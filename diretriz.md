@@ -47,16 +47,18 @@ cartografia-queimadas-ucs-pa/
 
 ## 3. Convenções Cartográficas e Simbologia Obrigatória
 
-### 3.1. Simbologia dos Focos de Queimada (BDQueimadas)
-A representação espacial dos focos segue a tipologia de triângulos (`▲`):
-* **Focos dos dias anteriores:**
+### 3.1. Simbologia e Temporalidade dos Focos de Queimada (BDQueimadas)
+A representação espacial dos focos segue a tipologia de triângulos (`▲`) com corte temporal de 48h (Abordagem B):
+* **Focos pretéritos / consolidados no período:**
   - Preenchimento (Fill): `#FAFF39` (Amarelo brilhante)
   - Contorno (Stroke/Edge): `#B35C15` (Bronze queimado)
   - Linewidth: `1.2 pt`, Tamanho: `65 pt`
-* **Dia atual da análise ou última observação:**
+* **Focos ativos recentes (< 48 horas da data de análise):**
   - Preenchimento (Fill): `#DB1E2A` (Vermelho alerta intenso)
   - Contorno (Stroke/Edge): `#801119` (Bordô escuro)
   - Linewidth: `1.5 pt`, Tamanho: `85 pt`
+* **Regra de Decaimento (Mapa Frio):**
+  - Se a data do último foco for superior a 48h da data de referência/análise, nenhum triângulo vermelho é plotado. Todos os focos são exibidos com a cor de histórico e o mapa estampa um badge explicativo (*"Status: Sem focos ativos nas últimas 48h"*), evitando falsos alertas de queima ativa.
 
 ### 3.2. Mosaicos de Basemap Sentinel-2 (GEE)
 Os basemaps orbitais são derivados da coleção `COPERNICUS/S2_SR_HARMONIZED` aplicando a função de limpeza padronizada:

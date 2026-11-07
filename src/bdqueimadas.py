@@ -222,18 +222,30 @@ def _standardize_focos_columns(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 def classify_focos_by_date(
     gdf: gpd.GeoDataFrame,
-    data_referencia: Optional[Union[str, date]] = None
+    data_referencia: Optional[Union[str, date]] = None,
+    limiar_dias_recente: int = 2
 ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, Dict[str, Any]]:
     """
-    Classifica os focos em duas categorias:
-    1. Focos do dia atual da análise ou última observação detectada
-    2. Focos dos dias anteriores
+    Classifica os focos adotando a Abordagem B (Corte Temporal de 48h / Recência Efetiva):
+    
+    1. Se houver focos detectados a até `limiar_dias_recente` (padrão: <= 2 dias / 48 horas)
+       em relação à data de referência (data_fim da análise ou data atual):
+       - 'gdf_recentes': Focos ativos recentes (<= 48h), destacados com marcador de alerta.
+       - 'gdf_anteriores': Focos pretéritos dos dias anteriores.
+       - 'tem_foco_recente': True
+       
+    2. Se a última observação ocorreu há mais de `limiar_dias_recente` (> 48h da referência):
+       - 'gdf_recentes': Vazio (nenhum ponto de alarme vermelho é plotado nos mapas).
+       - 'gdf_anteriores': Contém todos os focos do período (focos pretéritos consolidados).
+       - 'tem_foco_recente': False (Mapa Frio).
     """
     if gdf.empty:
         metricas = {
             "total": 0,
             "recentes": 0,
             "anteriores": 0,
+            "tem_foco_recente": False,
+            "dias_desde_ultimo": None,
             "data_ultima_observacao": "Sem focos",
             "satelites": []
         }
@@ -245,19 +257,40 @@ def classify_focos_by_date(
         else:
             ref_date = data_referencia
     else:
-        ref_date = gdf["data_apenas"].dropna().max()
+        ref_date = date.today()
+
+    max_foco_date = gdf["data_apenas"].dropna().max()
+    dias_desde_ultimo = (ref_date - max_foco_date).days if max_foco_date else 999
+    
+    # Se a diferença for negativa (ex: fuso horário GMT adiantado), normalizar para 0
+    if dias_desde_ultimo < 0:
+        dias_desde_ultimo = 0
+
+    # Critério de corte temporal de 48h (<= limiar_dias_recente)
+    tem_foco_recente = (dias_desde_ultimo <= limiar_dias_recente)
+    
+    if tem_foco_recente:
+        # Focos com até 48h em relação à referência são considerados recentes/ativos
+        dt_corte = ref_date - timedelta(days=limiar_dias_recente)
+        mask_recente = gdf["data_apenas"] >= dt_corte
+        gdf_recentes = gdf[mask_recente].copy()
+        gdf_anteriores = gdf[~mask_recente].copy()
         
-    mask_recente = gdf["data_apenas"] == ref_date
-    gdf_recentes = gdf[mask_recente].copy()
-    gdf_anteriores = gdf[~mask_recente].copy()
-    
-    gdf_recentes["cor_fill"] = FOCOS_RECENTES_FILL
-    gdf_recentes["cor_stroke"] = FOCOS_RECENTES_STROKE
-    gdf_recentes["categoria"] = "Última Observação"
-    
-    gdf_anteriores["cor_fill"] = FOCOS_ANTERIORES_FILL
-    gdf_anteriores["cor_stroke"] = FOCOS_ANTERIORES_STROKE
-    gdf_anteriores["categoria"] = "Dias Anteriores"
+        gdf_recentes["cor_fill"] = FOCOS_RECENTES_FILL
+        gdf_recentes["cor_stroke"] = FOCOS_RECENTES_STROKE
+        gdf_recentes["categoria"] = f"Focos Recentes (< 48h - {max_foco_date.strftime('%d/%m/%Y')})"
+        
+        gdf_anteriores["cor_fill"] = FOCOS_ANTERIORES_FILL
+        gdf_anteriores["cor_stroke"] = FOCOS_ANTERIORES_STROKE
+        gdf_anteriores["categoria"] = "Focos Pretéritos no Período"
+    else:
+        # Mapa Frio: sem focos nas últimas 48h. Nenhum ponto vermelho no mapa.
+        gdf_recentes = gdf.iloc[0:0].copy()
+        gdf_anteriores = gdf.copy()
+        
+        gdf_anteriores["cor_fill"] = FOCOS_ANTERIORES_FILL
+        gdf_anteriores["cor_stroke"] = FOCOS_ANTERIORES_STROKE
+        gdf_anteriores["categoria"] = "Focos Registrados no Período"
     
     sat_col = next((c for c in gdf.columns if "sat" in c.lower()), None)
     satelites = gdf[sat_col].dropna().unique().tolist() if sat_col else ["Diversos (INPE/BDQueimadas)"]
@@ -266,7 +299,10 @@ def classify_focos_by_date(
         "total": len(gdf),
         "recentes": len(gdf_recentes),
         "anteriores": len(gdf_anteriores),
-        "data_ultima_observacao": ref_date.strftime("%d/%m/%Y") if ref_date else "N/D",
+        "tem_foco_recente": tem_foco_recente,
+        "dias_desde_ultimo": dias_desde_ultimo,
+        "data_ultima_observacao": max_foco_date.strftime("%d/%m/%Y") if max_foco_date else "N/D",
+        "data_referencia": ref_date.strftime("%d/%m/%Y"),
         "satelites": satelites
     }
     
