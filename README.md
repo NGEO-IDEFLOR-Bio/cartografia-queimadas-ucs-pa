@@ -155,7 +155,7 @@ O fluxo de trabalho foi otimizado para resposta ágil a emergências em 2 etapas
 ### Etapa 1: Triagem e Diagnóstico de Emergência (Caderno 1)
 1. Abra o [![Triagem no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/triagem_focos_ucs.ipynb).
 2. Escolha o período (ex: *Últimas 48 horas* ou *Últimos 7 dias*) e execute. **Não requer conta ou autenticação no Earth Engine.**
-3. Em segundos, obtenha o ranking estadual com as UCs em chamas (🔴 Crítico, 🟠 Alerta, 🟡 Atenção), o mapa interativo Folium e baixe o ZIP com a Planilha Executiva `.xlsx` e o KML estadual para o Google Earth.
+3. Em segundos, obtenha o ranking estadual com as UCs em chamas (Crítico, Alerta, Atenção), o mapa interativo Folium e baixe o ZIP com a Planilha Executiva `.xlsx` e o KML estadual para o Google Earth.
 
 ### Etapa 2: Geração Cartográfica e Relatório Oficial (Caderno 2)
 1. Abra o [![Gerador Cartográfico no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb).

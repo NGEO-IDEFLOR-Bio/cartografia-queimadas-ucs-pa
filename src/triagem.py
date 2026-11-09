@@ -66,21 +66,21 @@ def _polygon_to_kml_coordinates(geom) -> str:
 
 def classificar_alerta(total_focos: int) -> Tuple[str, str, str]:
     """
-    Retorna o nível de alerta, badge e cor correspondente com base no total de focos.
+    Retorna o nível de alerta, badge textual e cor correspondente com base no total de focos.
     
     Returns
     -------
     Tuple[str, str, str]
-        (nivel_texto, badge_emoji, cor_hex)
+        (nivel_texto, badge_texto, cor_hex)
     """
     if total_focos >= 100:
-        return "CRÍTICO", "🔴 CRÍTICO", "#D32F2F"
+        return "CRÍTICO", "CRÍTICO", "#D32F2F"
     elif total_focos >= 10:
-        return "ALERTA", "🟠 ALERTA", "#F57C00"
+        return "ALERTA", "ALERTA", "#F57C00"
     elif total_focos >= 1:
-        return "ATENÇÃO", "🟡 ATENÇÃO", "#FBC02D"
+        return "ATENÇÃO", "ATENÇÃO", "#FBC02D"
     else:
-        return "NORMAL", "🟢 NORMAL", "#388E3C"
+        return "NORMAL", "NORMAL", "#388E3C"
 
 
 def exportar_planilha_triagem(
@@ -444,8 +444,8 @@ def executar_triagem_focos_ucs(
         
     periodo_str = f"{data_inicio}_a_{data_fim}"
     print(f"\n" + "=" * 70)
-    print(f" 🔥 TRIAGEM DE FOCOS DE QUEIMADA - 29 UCS ESTADUAIS DO PARÁ")
-    print(f" 📅 Período analisado: {data_inicio} até {data_fim}")
+    print(f" TRIAGEM DE FOCOS DE QUEIMADA - 29 UCS ESTADUAIS DO PARÁ")
+    print(f" Periodo analisado: {data_inicio} ate {data_fim}")
     print("=" * 70)
     
     # 2. Carregar Camada Oficial das 29 UCs
@@ -596,20 +596,20 @@ def executar_triagem_focos_ucs(
     total_focos_ucs = int(df_ranking["Total Focos"].sum())
     
     print("\n" + "-" * 70)
-    print(f" 📊 SÍNTESE DO MONITORAMENTO DE QUEIMADAS NAS UCS")
+    print(f" SINTESE DO MONITORAMENTO DE QUEIMADAS NAS UCS")
     print(f" • Total de Focos em UCs Estaduais: {total_focos_ucs:,}")
-    print(f" • UCs com Incidência de Fogo: {len(ucs_com_focos)} de {len(df_ranking)}")
-    print(f" • UCs em Nível CRÍTICO (>= 100): {len(df_ranking[df_ranking['nivel_alerta'] == 'CRÍTICO'])}")
-    print(f" • UCs em Nível ALERTA (10-99): {len(df_ranking[df_ranking['nivel_alerta'] == 'ALERTA'])}")
-    print(f" • UCs em Nível ATENÇÃO (1-9): {len(df_ranking[df_ranking['nivel_alerta'] == 'ATENÇÃO'])}")
+    print(f" • UCs com Incidencia de Fogo: {len(ucs_com_focos)} de {len(df_ranking)}")
+    print(f" • UCs em Nivel CRITICO (>= 100): {len(df_ranking[df_ranking['nivel_alerta'] == 'CRÍTICO'])}")
+    print(f" • UCs em Nivel ALERTA (10-99): {len(df_ranking[df_ranking['nivel_alerta'] == 'ALERTA'])}")
+    print(f" • UCs em Nivel ATENCAO (1-9): {len(df_ranking[df_ranking['nivel_alerta'] == 'ATENÇÃO'])}")
     print("-" * 70)
     
     if not ucs_com_focos.empty:
-        print("\n🏆 UCs PRIORITÁRIAS PARA GERAÇÃO DE RELATÓRIO E PRANCHAS CARTOGRÁFICAS:")
+        print("\nUCS PRIORITARIAS PARA GERACAO DE RELATORIO E PRANCHAS CARTOGRAFICAS:")
         for idx, row in ucs_com_focos.iterrows():
-            print(f"  {row['Alerta']} | {row['Unidade de Conservação']} -> {row['Total Focos']} focos (Ativos: {row['Focos Recentes (< 48h)']}) | FRP Máx: {row['FRP Máximo (MW)']} MW")
+            print(f"  [{row['Alerta']}] {row['Unidade de Conservação']} -> {row['Total Focos']} focos (Ativos: {row['Focos Recentes (< 48h)']}) | FRP Max: {row['FRP Máximo (MW)']} MW")
     else:
-        print("\n✅ Nenhuma Unidade de Conservação Estadual apresentou focos no período analisado.")
+        print("\n[OK] Nenhuma Unidade de Conservacao Estadual apresentou focos no periodo analisado.")
         
     lista_ucs_prioritarias = ucs_com_focos["Unidade de Conservação"].tolist()
     
