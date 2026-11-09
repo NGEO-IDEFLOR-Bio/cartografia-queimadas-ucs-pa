@@ -72,7 +72,13 @@ Os basemaps orbitais são derivados da coleção `COPERNICUS/S2_SR_HARMONIZED` a
 * **Variantes de Mapa Geradas (3 versões):**
   1. **Falsa Cor (Realce Queimadas):** Bandas `['B12', 'B8', 'B4']`, `min: 0.05`, `max: 0.40`, `gamma: 1.1`. Destaca cicatrizes de queima em tons avermelhados/cobre e vegetação saudável em tons verdes.
   2. **Cor Natural (RGB):** Bandas `['B4', 'B3', 'B2']`, `min: 0.02`, `max: 0.20`, `gamma: 1.2`. Visão fidedigna do relevo e cobertura vegetal.
-  3. **NBR (Normalized Burn Ratio):** $\frac{\text{B8} - \text{B12}}{\text{B8} + \text{B12}}$, `min: -0.20`, `max: 0.50`, paleta: `['black', 'red', 'orange', 'yellow', 'white']`. Evidencia o grau de severidade e queima recente.
+  3. **NBR (Normalized Burn Ratio):** $\frac{\text{B8} - \text{B12}}{\text{B8} + \text{B12}}$, `min: -0.30`, `max: 0.70`, calibrado para as tipologias do Pará (evitando falsos positivos em Campos Naturais do Marajó e Cerrado seco):
+     - Queimada Severa: $< -0.20$ (`#7F0000`)
+     - Queimada Moderada: $-0.20$ a $-0.08$ (`#D9534F`)
+     - Campos Naturais / Cerrado / Solo Exposto (Senescência Sazonal): $-0.08$ a $0.18$ (`#FAD7A0` a `#F9E79F`)
+     - Vegetação Herbácea / Arbustiva / Transição: $0.18$ a $0.38$ (`#82E0AA`)
+     - Floresta Preservada: $> 0.38$ (`#1E8449`)
+     - Corpos d'Água: Máscara NDWI (`#1F618D`)
 
 ---
 

@@ -303,7 +303,7 @@ def render_mapa_prancha(
     # 4.2. Legenda Cartográfica Flutuante de Severidade do Fogo (NBR)
     if "nbr" in tipo_basemap.lower() or "severidade" in tipo_basemap.lower():
         rec_nbr_leg = mpatches.FancyBboxPatch(
-            (0.68, 0.70), 0.305, 0.28,
+            (0.67, 0.67), 0.315, 0.31,
             boxstyle="square,pad=0.01",
             transform=ax_main.transAxes,
             facecolor="#FFFFFF", edgecolor="#2C3E50",
@@ -311,29 +311,30 @@ def render_mapa_prancha(
         )
         ax_main.add_patch(rec_nbr_leg)
         
-        ax_main.text(0.832, 0.958, "Severidade do Fogo (NBR)",
+        ax_main.text(0.827, 0.962, "Severidade do Fogo (NBR)",
                      transform=ax_main.transAxes, ha="center", va="top",
                      fontsize=6.8, fontweight="bold", color="#1B2631", zorder=51)
                      
         nbr_classes = [
-            ("#7F0000", "Queimada Severa (< -0.15)"),
-            ("#F46D43", "Queimada Moderada (-0.15 a 0.05)"),
-            ("#FEE08B", "Solo / Baixa Veg. (0.05 a 0.25)"),
-            ("#1A9641", "Floresta Preservada (> 0.25)"),
+            ("#7F0000", "Queimada Severa (< -0.20)"),
+            ("#D9534F", "Queimada Moderada (-0.20 a -0.08)"),
+            ("#FAD7A0", "Campos / Cerrado / Solo (-0.08 a 0.18)"),
+            ("#82E0AA", "Veg. Herbácea / Transição (0.18 a 0.38)"),
+            ("#1E8449", "Floresta Preservada (> 0.38)"),
             ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
         ]
-        y_swatch_start = 0.895
+        y_swatch_start = 0.918
         for i, (cor, label_cls) in enumerate(nbr_classes):
-            y_cls = y_swatch_start - (i * 0.040)
+            y_cls = y_swatch_start - (i * 0.038)
             patch_cls = mpatches.Rectangle(
-                (0.695, y_cls - 0.013), 0.026, 0.026,
+                (0.685, y_cls - 0.012), 0.024, 0.024,
                 transform=ax_main.transAxes,
                 facecolor=cor, edgecolor="#333333", linewidth=0.5, zorder=51
             )
             ax_main.add_patch(patch_cls)
-            ax_main.text(0.732, y_cls, label_cls,
+            ax_main.text(0.722, y_cls, label_cls,
                          transform=ax_main.transAxes, ha="left", va="center",
-                         fontsize=5.6, fontweight="semibold", color="#2C3E50", zorder=51)
+                         fontsize=5.4, fontweight="semibold", color="#2C3E50", zorder=51)
 
     # Moldura no topo (zorder=100)
     for spine in ax_main.spines.values():

@@ -79,15 +79,15 @@ VIS_CONFIGS = {
         "min": -0.30,
         "max": 0.70,
         "palette": [
-            "#7F0000",  # -0.30: Fogo de alta severidade / cicatriz profunda
-            "#D73027",  # -0.15: Queimada recente
-            "#F46D43",  # -0.05: Severidade moderada
-            "#FDAE61",  #  0.05: Queimada baixa / solo seco
-            "#FEE08B",  #  0.18: Solo exposto / transição
-            "#D9EF8B",  #  0.30: Vegetação esparsa / pastagem
-            "#A6D96A",  #  0.42: Vegetação moderada
-            "#1A9641",  #  0.55: Floresta conservada
-            "#004D20",  #  0.70: Floresta tropical densa
+            "#7F0000",  # -0.30: Queimada Severa (cinzas profundas / solo calcinado)
+            "#D9534F",  # -0.15: Queimada Moderada / Cicatriz recente
+            "#E67E22",  # -0.08: Transição / Queima em sub-bosque
+            "#FAD7A0",  #  0.02: Campos Naturais / Savanas / Cerrado seco sazonal
+            "#F9E79F",  #  0.15: Campos secos / Solo exposto
+            "#D4EFDF",  #  0.28: Vegetação herbácea úmida / Pastagem verde
+            "#82E0AA",  #  0.38: Vegetação arbustiva / Savana preservada
+            "#27AE60",  #  0.55: Floresta conservada
+            "#0E6251",  #  0.70: Floresta tropical densa
         ],
     }
 }
