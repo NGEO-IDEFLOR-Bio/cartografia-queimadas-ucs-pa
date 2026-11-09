@@ -31,13 +31,13 @@ def _polygon_to_kml_coordinates(geom) -> str:
         
     def _single_poly_kml(poly: Polygon) -> str:
         parts = []
-        ext_coords = " ".join(f"{x:.6f},{y:.6f},0" for x, y in poly.exterior.coords)
+        ext_coords = " ".join(f"{pt[0]:.6f},{pt[1]:.6f},0" for pt in poly.exterior.coords)
         parts.append(
             f"<outerBoundaryIs><LinearRing><tessellate>1</tessellate>"
             f"<coordinates>{ext_coords}</coordinates></LinearRing></outerBoundaryIs>"
         )
         for interior in poly.interiors:
-            int_coords = " ".join(f"{x:.6f},{y:.6f},0" for x, y in interior.coords)
+            int_coords = " ".join(f"{pt[0]:.6f},{pt[1]:.6f},0" for pt in interior.coords)
             parts.append(
                 f"<innerBoundaryIs><LinearRing><tessellate>1</tessellate>"
                 f"<coordinates>{int_coords}</coordinates></LinearRing></innerBoundaryIs>"
