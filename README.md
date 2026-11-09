@@ -1,6 +1,10 @@
 # Cartografia de Focos de Queimadas e Severidade em UCs do Pará
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb)
+| Fluxo Operacional | Atalho Google Colab | Finalidade |
+| :--- | :---: | :--- |
+| **1. Triagem e Alerta de Queimadas** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/triagem_focos_ucs.ipynb) | Varre as 29 UCs estaduais em segundos (sem GEE), ranqueia focos ativos, gera mapa interativo, KML e Excel |
+| **2. Gerador Cartográfico Oficial** | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb) | Produz as 3 pranchas A4 (300 DPI), dNBR / MapBiomas, Relatório Técnico (.docx), KML e ZIP |
+
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Google Earth Engine](https://img.shields.io/badge/Google%20Earth%20Engine-API-green.svg)](https://earthengine.google.com/)
 [![Datum](https://img.shields.io/badge/Datum-SIRGAS%202000-teal.svg)](https://www.ibge.gov.br/)
@@ -124,14 +128,18 @@ cartografia-queimadas-ucs-pa/
 ├── src/
 │   ├── __init__.py
 │   ├── config.py            # CRS, cores hexadecimais, layout milimétrico e parâmetros orbitais
-│   ├── gee_pipeline.py      # Autenticação GEE, máscaras Sentinel-2 e cálculo dinâmico de extensão
-│   ├── bdqueimadas.py       # Ingestão de focos, filtro espacial por UC e segregação temporal
+│   ├── gee_pipeline.py      # Autenticação GEE, máscaras Sentinel-2, dNBR e MapBiomas Coleção 11
+│   ├── bdqueimadas.py       # Ingestão de focos, filtro espacial por UC e segregação temporal (48h)
+│   ├── triagem.py           # Varredura estadual rápida das 29 UCs, ranqueamento e mapa Folium
 │   ├── layout_engine.py     # Motor de renderização A4 Paisagem (297x210 mm) em Python puro
-│   ├── report_generator.py  # Gerador automatizado de Relatório Técnico (.docx) para decisão rápida
-│   └── exporter.py          # Orquestrador das 3 pranchas (PNG/PDF) e do Relatório Técnico (.docx)
+│   ├── report_generator.py  # Gerador automatizado de Relatório Técnico (.docx) com síntese para >100 focos
+│   ├── excel_exporter.py    # Planilha detalhada com auto-filtro e resumo por município (.xlsx)
+│   ├── kml_generator.py     # Exportador Google Earth (.kml) com balões formatados e limites municipais
+│   └── exporter.py          # Orquestrador mestre de pranchas, relatórios, kml e excel
 ├── notebooks/
-│   └── colab_runner.ipynb   # Notebook orquestrador enxuto para execução no Google Colab
-├── outputs/                 # Pranchas geradas em PNG 300 DPI, PDFs e Relatório Técnico (.docx)
+│   ├── triagem_focos_ucs.ipynb  # Caderno 1: Varredura de emergência das 29 UCs (Zero GEE, ultrarrápido)
+│   └── colab_runner.ipynb       # Caderno 2: Gerador Cartográfico completo (Pranchas, dNBR, Word, ZIP)
+├── outputs/                 # Entregáveis gerados (PNGs 300 DPI, PDFs, DOCX, KML, XLSX, ZIP)
 ├── diretriz.md              # Diretrizes de projeto e regras técnicas de engenharia
 ├── layout_elements.json     # Medidas milimétricas dos elementos QGIS
 ├── requirements.txt         # Dependências do projeto
@@ -142,11 +150,18 @@ cartografia-queimadas-ucs-pa/
 
 ## 5. Guia Rápido de Execução
 
-### Opção A: Execução no Google Colab (Recomendada)
-1. Clique no botão [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb) para abrir o notebook diretamente no Google Colab.
-2. Na célula de autenticação GEE, confirme o ID do projeto Google Cloud (padrão: `ee-samuelsantosambientalcourse`, alterando caso utilize outra conta/projeto) e execute a autenticação interativa.
-3. Escolha a Unidade de Conservação desejada (ex: `Reserva de Desenvolvimento Sustentável Vitória de Souzel`) — o período analisa automaticamente os últimos 30 dias até hoje — e execute em 1 clique.
-4. Visualize as 3 pranchas geradas diretamente no navegador e baixe os PDFs e o Relatório Técnico Word (`.docx`).
+O fluxo de trabalho foi otimizado para resposta ágil a emergências em 2 etapas complementares:
+
+### Etapa 1: Triagem e Diagnóstico de Emergência (Caderno 1)
+1. Abra o [![Triagem no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/triagem_focos_ucs.ipynb).
+2. Escolha o período (ex: *Últimas 48 horas* ou *Últimos 7 dias*) e execute. **Não requer conta ou autenticação no Earth Engine.**
+3. Em segundos, obtenha o ranking estadual com as UCs em chamas (🔴 Crítico, 🟠 Alerta, 🟡 Atenção), o mapa interativo Folium e baixe o ZIP com a Planilha Executiva `.xlsx` e o KML estadual para o Google Earth.
+
+### Etapa 2: Geração Cartográfica e Relatório Oficial (Caderno 2)
+1. Abra o [![Gerador Cartográfico no Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa/blob/main/notebooks/colab_runner.ipynb).
+2. Conecte sua conta do Google Earth Engine.
+3. Cole o nome da UC prioritária indicada pela Triagem (ex: `Área de Proteção Ambiental do Marajó`) e selecione o método de severidade (`DNBR`, `MAPBIOMAS` Coleção 11 ou `NBR`).
+4. Execute e visualize as 3 pranchas A4 em 300 DPI, o Relatório Técnico institucional (.docx), o KML local e baixe o pacote completo compactado em ZIP com 1 clique.
 
 ### Opção B: Execução Local em Python
 
