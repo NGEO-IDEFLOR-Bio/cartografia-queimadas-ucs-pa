@@ -26,6 +26,9 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
 * **Cobertura Orbital de 100% da Área Visível:** O cálculo da extensão do mosaico Sentinel-2 expande e ajusta o *bounding box* ao *aspect ratio* exato do quadro do mapa principal ($155 \times 124\text{ mm}$), garantindo que a imagem preencha todo o viewport sem lacunas ou bordas pretas.
 * **Pranchas em Alta Resolução (300 DPI):** Exportação direta em formato raster (PNG 300 DPI) para relatórios e vetorial (PDF) para anexação em processos administrativos (PAe/SEI).
 * **Geração Automática de Relatório Técnico Oficial (.docx):** Produção instantânea do documento Word oficial no padrão institucional do NGEO/IDEFLOR-Bio, integrando tabelas quantitativas de focos, sensores orbitais, fundamentação metodológica e subsídios táticos para pronta tomada de decisão ambiental e fiscalização.
+* **Estratégia para Grandes Volumes de Focos (Milhares):** Para UCs de grande extensão (como APA do Marajó), o Apêndice A do Word adapta-se automaticamente a partir de 100 focos, gerando síntese por município e tabela de alvos críticos (maior FRP), evitando o inchaço ou travamento do arquivo .docx.
+* **Planilha Eletrônica Completa em Excel (.xlsx):** Exporta todos os focos com coordenadas SIRGAS 2000, data/hora, satélite, FRP, município e status em formato de tabela com auto-filtro ativado e aba de resumo consolidado por município.
+* **Pacote Espacial para Google Earth / GPS (.kml):** Gera arquivo KML completo com pastas organizadas (Focos de calor estilizados com balão informativo, Limite oficial da UC e Divisas municipais) pronto para envio imediato a brigadistas e equipes de campo.
 
 ---
 

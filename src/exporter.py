@@ -266,7 +266,38 @@ def processar_e_exportar_todos_os_mapas(
             "titulo": vis_spec["nome"]
         }
         
-    # 6. Gerar Relatório Técnico Oficial (.docx e .pdf) para Subsídio Imediato à Decisão
+    # 6. Gerar Planilha Excel Estruturada (.xlsx) e Pacote Geoespacial Google Earth (.kml)
+    excel_path = None
+    kml_path = None
+    try:
+        from src.excel_exporter import export_focos_to_excel
+        excel_out = OUTPUTS_DIR / f"Tabela_Focos_{safe_name}.xlsx"
+        export_focos_to_excel(
+            gdf_focos=gdf_focos_uc,
+            nome_uc=uc_real_name,
+            periodo_str=periodo_label,
+            output_path=excel_out,
+            metricas=metricas
+        )
+        excel_path = str(excel_out)
+    except Exception as e:
+        print(f"[!] Aviso: Não foi possível gerar planilha Excel: {e}")
+
+    try:
+        from src.kml_generator import export_focos_to_kml
+        kml_out = OUTPUTS_DIR / f"Focos_Queimada_{safe_name}.kml"
+        export_focos_to_kml(
+            gdf_focos=gdf_focos_uc,
+            gdf_uc=gdf_uc,
+            nome_uc=uc_real_name,
+            output_path=kml_out,
+            metricas=metricas
+        )
+        kml_path = str(kml_out)
+    except Exception as e:
+        print(f"[!] Aviso: Não foi possível gerar pacote KML: {e}")
+
+    # 7. Gerar Relatório Técnico Oficial (.docx e .pdf) para Subsídio Imediato à Decisão
     relatorio_path = None
     relatorio_pdf_path = None
     try:
@@ -289,12 +320,14 @@ def processar_e_exportar_todos_os_mapas(
     except Exception as e:
         print(f"[!] Aviso: Não foi possível gerar relatório técnico: {e}")
         
-    print(f"\n[OK] Sucesso! Todas as 3 pranchas e o Relatório Técnico foram gerados e salvos em: {OUTPUTS_DIR}")
+    print(f"\n[OK] Sucesso! Pranchas, Relatório Técnico, Planilha Excel e KML salvos em: {OUTPUTS_DIR}")
     return {
         "uc": uc_real_name,
         "metricas": metricas,
         "pranchas": resultados_exportados,
         "relatorio_docx": relatorio_path,
         "relatorio_pdf": relatorio_pdf_path,
+        "planilha_excel": excel_path,
+        "pacote_kml": kml_path,
         "extent": vis_extent
     }

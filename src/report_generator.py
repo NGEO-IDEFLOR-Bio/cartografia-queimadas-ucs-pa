@@ -592,6 +592,9 @@ def build_technical_report_docx(
 
     # 8. Seção 6: Considerações Finais (Sem direcionamento de medidas operacionais)
     add_heading_section(doc, "6. Considerações Finais")
+    safe_name = nome_uc.replace(" ", "_").replace("/", "-")
+    limiar_anexo = 100
+    
     if tem_recente and recentes_focos > 0:
         texto_cons = (
             f"A espacialização dos dados registrou um total de {total_focos} focos de calor no interior da "
@@ -607,12 +610,21 @@ def build_technical_report_docx(
             f"em {data_rec}{dias_info_c}."
         )
     add_body_paragraph(doc, texto_cons)
-    add_body_paragraph(
-        doc,
-        "O presente documento, acompanhado das 3 (três) pranchas cartográficas oficiais e da tabela "
-        "nominal de coordenadas geodésicas (SIRGAS 2000) discriminada no Apêndice A, fornece o subsídio "
-        "espacial para fundamentar a avaliação e as decisões a serem adotadas pelos setores competentes."
-    )
+
+    if total_focos > limiar_anexo:
+        texto_anexos = (
+            f"O presente documento, acompanhado das 3 (três) pranchas cartográficas oficiais, da planilha eletrônica "
+            f"de alta granularidade (Tabela_Focos_{safe_name}.xlsx) e do pacote vetorial georreferenciado "
+            f"(Focos_Queimada_{safe_name}.kml), fornece o subsídio técnico e espacial para fundamentar o planejamento "
+            "e a pronta intervenção dos setores competentes de fiscalização e manejo do fogo."
+        )
+    else:
+        texto_anexos = (
+            "O presente documento, acompanhado das 3 (três) pranchas cartográficas oficiais e da tabela "
+            "nominal de coordenadas geodésicas (SIRGAS 2000) discriminada no Apêndice A, fornece o subsídio "
+            "espacial para fundamentar a avaliação e as decisões a serem adotadas pelos setores competentes."
+        )
+    add_body_paragraph(doc, texto_anexos)
 
     # 9. Seção 7: Referências e Fontes de Dados (Formato ABNT NBR 6023 com negrito no título da obra)
     add_heading_section(doc, "7. Referências e Fontes de Dados")
@@ -675,88 +687,230 @@ def build_technical_report_docx(
     doc.add_page_break()
     
     add_heading_section(doc, "APÊNDICE A – Relação Nominal e Coordenadas Geográficas dos Focos Detectados")
-    add_body_paragraph(
-        doc,
-        f"A tabela a seguir discrimina a totalidade dos {total_focos} focos de calor registrados "
-        f"no polígono da {nome_uc} durante o período de monitoramento ({periodo_str}), fornecendo "
-        "as coordenadas geodésicas (SIRGAS 2000), o satélite detector, o município de incidência "
-        "e a Potência Radiativa do Fogo (FRP):"
-    )
-
+    
+    limiar_tabela_docx = 100
+    
     if not gdf_focos_uc.empty:
-        # Ordenar: mais recentes primeiro
         df_ord = gdf_focos_uc.copy()
         if "data_hora_gmt" in df_ord.columns:
             df_ord["data_sort"] = pd.to_datetime(df_ord["data_hora_gmt"], errors="coerce")
             df_ord = df_ord.sort_values(by="data_sort", ascending=False)
+        if "frp" in df_ord.columns:
+            df_ord["frp_num"] = pd.to_numeric(df_ord["frp"], errors="coerce")
+        else:
+            df_ord["frp_num"] = 0.0
+
+        if total_focos > limiar_tabela_docx:
+            # Estratégia para Grandes Volumes (> 100 focos): Evita travamento e gigantismo do DOCX
+            add_body_paragraph(
+                doc,
+                f"Em face da elevada densidade de ocorrências registrada no período avaliado ({total_focos} focos de calor), "
+                "a íntegra da relação individualizada de coordenadas geodésicas e atributos orbitais foi estruturada "
+                f"em planilha eletrônica aberta anexa (Tabela_Focos_{safe_name}.xlsx) e pacote vetorial (Focos_Queimada_{safe_name}.kml), "
+                "integrantes deste procedimento técnico. Esta medida garante a operabilidade do documento, permitindo "
+                "a filtragem espacial dinâmica, cálculos analíticos e importação em sistemas SIG e aparelhos GPS de campo."
+            )
             
-        n_rows = len(df_ord) + 1
-        t_apend = doc.add_table(rows=n_rows, cols=7)
-        t_apend.alignment = WD_TABLE_ALIGNMENT.CENTER
-        t_apend.autofit = False
-
-        headers_ap = ("Nº", "Data/Hora (GMT)", "Latitude", "Longitude", "Satélite", "FRP (MW)", "Município")
-        col_widths = (Inches(0.4), Inches(1.3), Inches(1.0), Inches(1.0), Inches(1.0), Inches(0.8), Inches(1.1))
-
-        row_h_ap = t_apend.rows[0]
-        for col_idx, h_text in enumerate(headers_ap):
-            cell = row_h_ap.cells[col_idx]
-            cell.width = col_widths[col_idx]
-            set_cell_background(cell, "EAEDED")
-            set_cell_margins(cell, top=60, bottom=60, left=60, right=60)
-            p = cell.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.first_line_indent = Cm(0)
-            p.paragraph_format.line_spacing = 1.0
-            r = p.add_run(h_text)
-            r.font.name = "Arial"
-            r.font.size = Pt(8.5)
-            r.bold = True
-
-        for idx, (_, row_f) in enumerate(df_ord.iterrows(), start=1):
-            row_elem = t_apend.rows[idx]
+            # A.1: Tabela Sintética por Município
+            add_heading_section(doc, "A.1 Síntese de Focos por Município da Unidade de Conservação", is_main=False)
             
-            # Formatação de data
-            dh = str(row_f.get("data_hora_gmt", ""))
-            try:
-                dt_val = pd.to_datetime(dh)
-                dh_fmt = dt_val.strftime("%d/%m/%Y %H:%M")
-            except Exception:
-                dh_fmt = dh[:16] if len(dh)>=16 else dh
-
-            # Latitude e Longitude
-            lat_val = row_f.geometry.y if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lat", 0.0)
-            lon_val = row_f.geometry.x if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lon", 0.0)
-            lat_fmt = f"{lat_val:.5f}°"
-            lon_fmt = f"{lon_val:.5f}°"
-
-            sat_fmt = str(row_f.get("satelite", "-"))
-            frp_raw = row_f.get("frp", None)
-            try:
-                frp_fmt = f"{float(frp_raw):.1f}" if pd.notnull(frp_raw) and float(frp_raw) > 0 else "-"
-            except Exception:
-                frp_fmt = "-"
-
-            muni_fmt = str(row_f.get("municipio", "-")).title()
-
-            vals_row = (str(idx), dh_fmt, lat_fmt, lon_fmt, sat_fmt, frp_fmt, muni_fmt)
+            df_muni_grp = df_ord.copy()
+            df_muni_grp["muni_clean"] = df_muni_grp["municipio"].astype(str).str.title()
+            grp_m = df_muni_grp.groupby("muni_clean").agg(
+                qtd=("geometry", "count"),
+                frp_max=("frp_num", "max"),
+                frp_mean=("frp_num", "mean")
+            ).reset_index().sort_values(by="qtd", ascending=False)
             
-            bg_color = "FFFFFF" if idx % 2 == 1 else "F9FAFA"
+            t_grp = doc.add_table(rows=len(grp_m) + 1, cols=5)
+            t_grp.alignment = WD_TABLE_ALIGNMENT.CENTER
+            t_grp.autofit = False
             
-            for col_idx, val_txt in enumerate(vals_row):
-                cell = row_elem.cells[col_idx]
-                cell.width = col_widths[col_idx]
-                set_cell_background(cell, bg_color)
-                set_cell_margins(cell, top=45, bottom=45, left=50, right=50)
-                p = cell.paragraphs[0]
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in [0, 1, 2, 3, 4, 5] else WD_ALIGN_PARAGRAPH.LEFT
+            headers_grp = ("Município", "Qtd. Focos", "Representatividade (%)", "FRP Médio (MW)", "FRP Máximo (MW)")
+            col_w_grp = (Inches(2.2), Inches(1.1), Inches(1.3), Inches(1.1), Inches(1.1))
+            
+            row_h_g = t_grp.rows[0]
+            for c_i, h_t in enumerate(headers_grp):
+                cell_g = row_h_g.cells[c_i]
+                cell_g.width = col_w_grp[c_i]
+                set_cell_background(cell_g, "EAEDED")
+                set_cell_margins(cell_g, top=60, bottom=60, left=60, right=60)
+                p = cell_g.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p.paragraph_format.first_line_indent = Cm(0)
                 p.paragraph_format.line_spacing = 1.0
-                r = p.add_run(val_txt)
+                r = p.add_run(h_t)
                 r.font.name = "Arial"
-                r.font.size = Pt(8.0)
-                if col_idx == 0:
-                    r.bold = True
+                r.font.size = Pt(8.5)
+                r.bold = True
+                
+            for idx_g, (_, r_g) in enumerate(grp_m.iterrows(), start=1):
+                row_g_elem = t_grp.rows[idx_g]
+                pct_g = (r_g["qtd"] / total_focos * 100.0) if total_focos > 0 else 0.0
+                frp_med_str = f"{r_g['frp_mean']:.1f}" if pd.notnull(r_g["frp_mean"]) else "-"
+                frp_max_str = f"{r_g['frp_max']:.1f}" if pd.notnull(r_g["frp_max"]) else "-"
+                
+                vals_g_row = (r_g["muni_clean"], str(r_g["qtd"]), f"{pct_g:.1f}%", frp_med_str, frp_max_str)
+                bg_g = "FFFFFF" if idx_g % 2 == 1 else "F9FAFA"
+                
+                for c_i, val_t in enumerate(vals_g_row):
+                    cell_g = row_g_elem.cells[c_i]
+                    cell_g.width = col_w_grp[c_i]
+                    set_cell_background(cell_g, bg_g)
+                    set_cell_margins(cell_g, top=45, bottom=45, left=50, right=50)
+                    p = cell_g.paragraphs[0]
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT if c_i == 0 else WD_ALIGN_PARAGRAPH.CENTER
+                    p.paragraph_format.first_line_indent = Cm(0)
+                    p.paragraph_format.line_spacing = 1.0
+                    r = p.add_run(val_t)
+                    r.font.name = "Arial"
+                    r.font.size = Pt(8.5)
+                    if c_i == 0:
+                        r.bold = True
+
+            # A.2: Amostra Prioritária com as 15 maiores potências de fogo (FRP)
+            add_heading_section(doc, "A.2 Amostra Prioritária – Focos com Maior Potência Radiativa (FRP)", is_main=False)
+            add_body_paragraph(
+                doc,
+                "A tabela a seguir discrimina as 15 (quinze) ocorrências de maior intensidade energética registradas "
+                "no interior da Unidade de Conservação, servindo de indicativo imediato para alvos críticos de queima:"
+            )
+            df_amostra = df_ord.sort_values(by="frp_num", ascending=False).head(15)
+            
+            t_apend = doc.add_table(rows=len(df_amostra) + 1, cols=7)
+            t_apend.alignment = WD_TABLE_ALIGNMENT.CENTER
+            t_apend.autofit = False
+
+            headers_ap = ("Nº", "Data/Hora (GMT)", "Latitude", "Longitude", "Satélite", "FRP (MW)", "Município")
+            col_widths = (Inches(0.4), Inches(1.3), Inches(1.0), Inches(1.0), Inches(1.0), Inches(0.8), Inches(1.1))
+
+            row_h_ap = t_apend.rows[0]
+            for col_idx, h_text in enumerate(headers_ap):
+                cell = row_h_ap.cells[col_idx]
+                cell.width = col_widths[col_idx]
+                set_cell_background(cell, "EAEDED")
+                set_cell_margins(cell, top=60, bottom=60, left=60, right=60)
+                p = cell.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.first_line_indent = Cm(0)
+                p.paragraph_format.line_spacing = 1.0
+                r = p.add_run(h_text)
+                r.font.name = "Arial"
+                r.font.size = Pt(8.5)
+                r.bold = True
+
+            for idx, (_, row_f) in enumerate(df_amostra.iterrows(), start=1):
+                row_elem = t_apend.rows[idx]
+                dh = str(row_f.get("data_hora_gmt", ""))
+                try:
+                    dt_val = pd.to_datetime(dh)
+                    dh_fmt = dt_val.strftime("%d/%m/%Y %H:%M")
+                except Exception:
+                    dh_fmt = dh[:16] if len(dh)>=16 else dh
+
+                lat_val = row_f.geometry.y if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lat", 0.0)
+                lon_val = row_f.geometry.x if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lon", 0.0)
+                sat_fmt = str(row_f.get("satelite", "-"))
+                frp_raw = row_f.get("frp", None)
+                try:
+                    frp_fmt = f"{float(frp_raw):.1f}" if pd.notnull(frp_raw) and float(frp_raw) > 0 else "-"
+                except Exception:
+                    frp_fmt = "-"
+                muni_fmt = str(row_f.get("municipio", "-")).title()
+
+                vals_row = (str(idx), dh_fmt, f"{lat_val:.5f}°", f"{lon_val:.5f}°", sat_fmt, frp_fmt, muni_fmt)
+                bg_color = "FFFFFF" if idx % 2 == 1 else "F9FAFA"
+                
+                for col_idx, val_txt in enumerate(vals_row):
+                    cell = row_elem.cells[col_idx]
+                    cell.width = col_widths[col_idx]
+                    set_cell_background(cell, bg_color)
+                    set_cell_margins(cell, top=45, bottom=45, left=50, right=50)
+                    p = cell.paragraphs[0]
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in [0, 1, 2, 3, 4, 5] else WD_ALIGN_PARAGRAPH.LEFT
+                    p.paragraph_format.first_line_indent = Cm(0)
+                    p.paragraph_format.line_spacing = 1.0
+                    r = p.add_run(val_txt)
+                    r.font.name = "Arial"
+                    r.font.size = Pt(8.0)
+                    if col_idx == 0:
+                        r.bold = True
+
+        else:
+            # Para volumes menores (<= 100 focos), renderiza a tabela completa no Word
+            add_body_paragraph(
+                doc,
+                f"A tabela a seguir discrimina a totalidade dos {total_focos} focos de calor registrados "
+                f"no polígono da {nome_uc} durante o período de monitoramento ({periodo_str}), fornecendo "
+                "as coordenadas geodésicas (SIRGAS 2000), o satélite detector, o município de incidência "
+                "e a Potência Radiativa do Fogo (FRP):"
+            )
+            
+            n_rows = len(df_ord) + 1
+            t_apend = doc.add_table(rows=n_rows, cols=7)
+            t_apend.alignment = WD_TABLE_ALIGNMENT.CENTER
+            t_apend.autofit = False
+
+            headers_ap = ("Nº", "Data/Hora (GMT)", "Latitude", "Longitude", "Satélite", "FRP (MW)", "Município")
+            col_widths = (Inches(0.4), Inches(1.3), Inches(1.0), Inches(1.0), Inches(1.0), Inches(0.8), Inches(1.1))
+
+            row_h_ap = t_apend.rows[0]
+            for col_idx, h_text in enumerate(headers_ap):
+                cell = row_h_ap.cells[col_idx]
+                cell.width = col_widths[col_idx]
+                set_cell_background(cell, "EAEDED")
+                set_cell_margins(cell, top=60, bottom=60, left=60, right=60)
+                p = cell.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.first_line_indent = Cm(0)
+                p.paragraph_format.line_spacing = 1.0
+                r = p.add_run(h_text)
+                r.font.name = "Arial"
+                r.font.size = Pt(8.5)
+                r.bold = True
+
+            for idx, (_, row_f) in enumerate(df_ord.iterrows(), start=1):
+                row_elem = t_apend.rows[idx]
+                dh = str(row_f.get("data_hora_gmt", ""))
+                try:
+                    dt_val = pd.to_datetime(dh)
+                    dh_fmt = dt_val.strftime("%d/%m/%Y %H:%M")
+                except Exception:
+                    dh_fmt = dh[:16] if len(dh)>=16 else dh
+
+                lat_val = row_f.geometry.y if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lat", 0.0)
+                lon_val = row_f.geometry.x if hasattr(row_f, "geometry") and row_f.geometry else row_f.get("lon", 0.0)
+                lat_fmt = f"{lat_val:.5f}°"
+                lon_fmt = f"{lon_val:.5f}°"
+
+                sat_fmt = str(row_f.get("satelite", "-"))
+                frp_raw = row_f.get("frp", None)
+                try:
+                    frp_fmt = f"{float(frp_raw):.1f}" if pd.notnull(frp_raw) and float(frp_raw) > 0 else "-"
+                except Exception:
+                    frp_fmt = "-"
+
+                muni_fmt = str(row_f.get("municipio", "-")).title()
+
+                vals_row = (str(idx), dh_fmt, lat_fmt, lon_fmt, sat_fmt, frp_fmt, muni_fmt)
+                bg_color = "FFFFFF" if idx % 2 == 1 else "F9FAFA"
+                
+                for col_idx, val_txt in enumerate(vals_row):
+                    cell = row_elem.cells[col_idx]
+                    cell.width = col_widths[col_idx]
+                    set_cell_background(cell, bg_color)
+                    set_cell_margins(cell, top=45, bottom=45, left=50, right=50)
+                    p = cell.paragraphs[0]
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if col_idx in [0, 1, 2, 3, 4, 5] else WD_ALIGN_PARAGRAPH.LEFT
+                    p.paragraph_format.first_line_indent = Cm(0)
+                    p.paragraph_format.line_spacing = 1.0
+                    r = p.add_run(val_txt)
+                    r.font.name = "Arial"
+                    r.font.size = Pt(8.0)
+                    if col_idx == 0:
+                        r.bold = True
+    else:
+        add_body_paragraph(doc, "Não foram registrados focos de calor na área da Unidade de Conservação no período avaliado.")
 
     # 12. Salvar Arquivo
     if output_path is None:
