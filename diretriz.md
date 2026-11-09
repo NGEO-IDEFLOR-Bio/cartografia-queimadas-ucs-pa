@@ -72,13 +72,18 @@ Os basemaps orbitais são derivados da coleção `COPERNICUS/S2_SR_HARMONIZED` a
 * **Variantes de Mapa Geradas (3 versões):**
   1. **Falsa Cor (Realce Queimadas):** Bandas `['B12', 'B8', 'B4']`, `min: 0.05`, `max: 0.40`, `gamma: 1.1`. Destaca cicatrizes de queima em tons avermelhados/cobre e vegetação saudável em tons verdes.
   2. **Cor Natural (RGB):** Bandas `['B4', 'B3', 'B2']`, `min: 0.02`, `max: 0.20`, `gamma: 1.2`. Visão fidedigna do relevo e cobertura vegetal.
-  3. **NBR (Normalized Burn Ratio):** $\frac{\text{B8} - \text{B12}}{\text{B8} + \text{B12}}$, `min: -0.30`, `max: 0.70`, calibrado para as tipologias do Pará (evitando falsos positivos em Campos Naturais do Marajó e Cerrado seco):
-     - Queimada Severa: $< -0.20$ (`#7F0000`)
-     - Queimada Moderada: $-0.20$ a $-0.08$ (`#D9534F`)
-     - Campos Naturais / Cerrado / Solo Exposto (Senescência Sazonal): $-0.08$ a $0.18$ (`#FAD7A0` a `#F9E79F`)
-     - Vegetação Herbácea / Arbustiva / Transição: $0.18$ a $0.38$ (`#82E0AA`)
-     - Floresta Preservada: $> 0.38$ (`#1E8449`)
-     - Corpos d'Água: Máscara NDWI (`#1F618D`)
+  3. **Severidade Espectral do Fogo (Opções Escolhíveis):**
+     - **Opção A (Padrão Ouro): dNBR Bi-temporal (Pré vs Pós — USGS/MTBS):** $\text{NBR}_{\text{pré}} - \text{NBR}_{\text{pós}}$. Compara a perda real de biomassa entre a janela de análise e o período imediatamente anterior (45 dias antes). Imune a falsos positivos em campos secos do Marajó e savanas/cerrados:
+       - Alta Severidade: $> 0.44$ (`#7F0000`)
+       - Moderada-Alta: $0.27$ a $0.44$ (`#D73027`)
+       - Baixa Severidade: $0.10$ a $0.27$ (`#FDAE61`)
+       - Não Queimado / Estável: $-0.10$ a $0.10$ (`#A6D96A`)
+       - Rebrota Vegetal: $< -0.10$ (`#1A9641`)
+       - Corpos d'Água: Máscara NDWI (`#1F618D`)
+     - **Opção B: Mascaramento Fenológico via MapBiomas Brasil Coleção 11:**
+       Asset: `projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3`
+       Utiliza as classes de Campo Alagável (11 - Marajó), Formação Campestre (12), Pastagem (15) e Mosaico (21) para normalizar a senescência natural da palha seca, exigindo queima profunda ($< -0.22$) para disparar alerta de fogo em áreas abertas.
+     - **Opção C: NBR Clássico Unitemporal Calibrado.**
 
 ---
 

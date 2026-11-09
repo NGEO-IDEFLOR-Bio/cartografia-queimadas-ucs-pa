@@ -126,6 +126,7 @@ def processar_e_exportar_todos_os_mapas(
     dias_analise: int = 30,
     focos_source: Union[str, Path, ee.FeatureCollection] = "BDQUEIMADAS",
     data_referencia_foco: Optional[str] = None,
+    metodo_severidade: str = "DNBR",
     buffer_uc_metros: float = 0.0,
     output_prefix: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -133,10 +134,14 @@ def processar_e_exportar_todos_os_mapas(
     Executa o pipeline completo de ponta a ponta e exporta as 3 variantes de mapa:
     - Falsa Cor
     - Cor Natural
-    - NBR
+    - Severidade do Fogo (opções: 'DNBR' bi-temporal, 'MAPBIOMAS' Coleção 11 ou 'NBR' clássico)
     
     Parameters
     ----------
+    metodo_severidade : str
+        'DNBR' (padrão): Análise Bi-temporal (dNBR = NBR_pré - NBR_pós).
+        'MAPBIOMAS': Mascaramento fenológico com a Coleção 11 do MapBiomas.
+        'NBR': NBR unitemporal clássico.
     focos_source : Union[str, Path, ee.FeatureCollection]
         'BDQUEIMADAS' (padrão): Baixa automaticamente os focos oficiais do INPE/BDQueimadas.
         Ou caminho de arquivo local (.csv, .geojson, .shp) ou asset do GEE.
@@ -151,6 +156,7 @@ def processar_e_exportar_todos_os_mapas(
     print(f"\n=======================================================")
     print(f" Início do Processamento de Focos: {nome_uc}")
     print(f" Período: {data_inicio} até {data_fim}")
+    print(f" Método de Severidade Espectral: {metodo_severidade.upper()}")
     print(f"=======================================================\n")
     
     # 1. Carregar Geometria da UC
@@ -170,11 +176,14 @@ def processar_e_exportar_todos_os_mapas(
     )
     print(f"[OK] Extensão do viewport calculada: {vis_extent}")
     
-    # 3. Construir Mosaicos Sentinel-2 e NBR no GEE
-    print("[*] Processando mosaicos Sentinel-2 Harmonized (mediana com máscara de nuvens/brilho)...")
-    s2_data = build_sentinel2_mosaics(vis_extent, data_inicio, data_fim)
+    # 3. Construir Mosaicos Sentinel-2 e Severidade (dNBR / MapBiomas / NBR) no GEE
+    print(f"[*] Processando mosaicos orbitais e índice de severidade ({metodo_severidade.upper()})...")
+    s2_data = build_sentinel2_mosaics(
+        vis_extent, data_inicio, data_fim, metodo_severidade=metodo_severidade
+    )
     mosaico = s2_data["mosaico"]
-    nbr = s2_data["nbr"]
+    severidade_layer = s2_data["nbr"]
+    tipo_sev_key = s2_data.get("tipo_severidade", "dnbr")
     
     # 4. Ingestão e Classificação dos Focos de Queimada
     print("[*] Ingerindo e classificando focos de queimada...")
@@ -213,24 +222,26 @@ def processar_e_exportar_todos_os_mapas(
         print(f"  • [MAPA FRIO] Sem focos ativos nas últimas 48h{dias_info}.")
         print(f"  • Focos acumulados no período: {metricas['anteriores']} (Último registro em {metricas['data_ultima_observacao']})")
     
-    # 5. Gerar as 3 Variantes de Mapa (Falsa Cor, Cor Natural, NBR)
+    # 5. Gerar as 3 Variantes de Mapa (Falsa Cor, Cor Natural, Severidade dNBR/MapBiomas/NBR)
     safe_name = uc_real_name.replace(" ", "_").replace("/", "-")
     prefix = output_prefix or f"Mapa_Fogo_{safe_name}"
     periodo_label = f"{data_inicio} a {data_fim}"
     
     resultados_exportados = {}
     
+    spec_sev = VIS_CONFIGS.get(tipo_sev_key, VIS_CONFIGS.get("dnbr", VIS_CONFIGS["nbr"]))
     basemap_variants = [
         ("falsa_cor", mosaico, VIS_CONFIGS["falsa_cor"]),
         ("cor_natural", mosaico, VIS_CONFIGS["cor_natural"]),
-        ("nbr", nbr, VIS_CONFIGS["nbr"])
+        (tipo_sev_key, severidade_layer, spec_sev)
     ]
     
     for tipo_key, ee_layer, vis_spec in basemap_variants:
         print(f"\n[*] Renderizando basemap: {vis_spec['nome']}...")
         try:
-            # Baixar imagem renderizada (preservando corpos d'água no NBR)
-            w_mask = s2_data.get("water_mask") if tipo_key == "nbr" else None
+            # Baixar imagem renderizada (preservando corpos d'água no NBR/dNBR)
+            is_sev = any(k in tipo_key.lower() for k in ["nbr", "dnbr", "severidade"])
+            w_mask = s2_data.get("water_mask") if is_sev else None
             basemap_array = fetch_rendered_basemap(
                 ee_layer, vis_extent, vis_spec, dimensions=(1280, 1024), water_mask=w_mask
             )

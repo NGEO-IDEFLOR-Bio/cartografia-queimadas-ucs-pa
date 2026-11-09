@@ -55,6 +55,10 @@ FOCOS_RECENTES_LW = 1.6              # Espessura do traço
 GEE_S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 DEFAULT_GEE_PROJECT = "ee-samuelsantosambientalcourse"
 
+# Assets Oficiais MapBiomas Brasil (Coleção 11 - LULC 1985-2024)
+MAPBIOMAS_C11_ASSET = "projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3"
+MAPBIOMAS_YEAR_DEFAULT = 2024
+
 # Visualizações Orbitais
 VIS_CONFIGS = {
     "falsa_cor": {
@@ -73,8 +77,37 @@ VIS_CONFIGS = {
         "max": 0.20,
         "gamma": 1.2,
     },
+    "dnbr": {
+        "nome": "Severidade do Fogo (dNBR Bi-temporal)",
+        "subtitulo": "Delta NBR (Pré vs Pós) — Padrão USGS/MTBS/Copernicus",
+        "min": -0.10,
+        "max": 0.66,
+        "palette": [
+            "#1A9641",  # <= -0.10: Rebrota vegetal / Aumento de vigor
+            "#A6D96A",  #  0.00: Vegetação não queimada / Estável (Campos/Florestas)
+            "#FEE08B",  #  0.10: Severidade baixa / Queima leve
+            "#FDAE61",  #  0.27: Severidade moderada-baixa
+            "#D73027",  #  0.44: Severidade moderada-alta
+            "#7F0000",  # >= 0.66: Severidade alta / Queima profunda da biomassa
+        ],
+    },
+    "nbr_mapbiomas": {
+        "nome": "Severidade do Fogo (MapBiomas C11)",
+        "subtitulo": "NBR com Mascaramento Fenológico de Campos Naturais do Marajó",
+        "min": -0.30,
+        "max": 0.70,
+        "palette": [
+            "#7F0000",  # -0.30: Queimada Severa (carvão / cinzas profundas)
+            "#D9534F",  # -0.15: Queimada Moderada em dossel
+            "#E67E22",  # -0.08: Queima leve em sub-bosque
+            "#FAD7A0",  #  0.05: Campos Naturais / Savanas / Cerrado seco (MapBiomas 11/12/15)
+            "#D4EFDF",  #  0.25: Vegetação herbácea úmida
+            "#27AE60",  #  0.45: Floresta conservada
+            "#0E6251",  #  0.70: Floresta tropical densa
+        ],
+    },
     "nbr": {
-        "nome": "NBR (Severidade do Fogo)",
+        "nome": "NBR Clássico (Unitemporal)",
         "subtitulo": "Normalized Burn Ratio (B8 - B12) / (B8 + B12)",
         "min": -0.30,
         "max": 0.70,

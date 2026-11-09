@@ -7,6 +7,7 @@ composição mediana e cálculo dinâmico da extensão para preenchimento de 100
 da área visível do mapa.
 """
 
+from datetime import datetime, timedelta
 import math
 import io
 import requests
@@ -15,7 +16,10 @@ import numpy as np
 from PIL import Image
 
 import ee
-from src.config import GEE_S2_COLLECTION, DEFAULT_GEE_PROJECT, VIS_CONFIGS
+from src.config import (
+    GEE_S2_COLLECTION, DEFAULT_GEE_PROJECT, VIS_CONFIGS,
+    MAPBIOMAS_C11_ASSET, MAPBIOMAS_YEAR_DEFAULT
+)
 
 
 def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
@@ -117,23 +121,33 @@ def calculate_visible_extent(
 def build_sentinel2_mosaics(
     extent_bbox: Tuple[float, float, float, float],
     data_inicio: str,
-    data_fim: str
+    data_fim: str,
+    metodo_severidade: str = "DNBR",
+    dias_pre_fogo: int = 45
 ) -> Dict[str, Any]:
     """
-    Cria os mosaicos Sentinel-2 medianos e o NBR cobrindo a extensão visível total.
+    Cria os mosaicos Sentinel-2 medianos e a camada de severidade de queimada
+    cobringo a extensão visível total com suporte a duas abordagens robustas:
+    1. 'DNBR' (Padrão): Análise Bi-temporal (dNBR = NBR_pré - NBR_pós), imune a falsos positivos em campos/savana.
+    2. 'MAPBIOMAS': Mascaramento fenológico baseado na Coleção 11 do MapBiomas (classes 11, 12, 15, 21).
+    3. 'NBR': NBR unitemporal calibrado clássico.
     
     Returns
     -------
     dict com:
-        'mosaico': ee.Image mediana limpa
-        'nbr': ee.Image NBR calculado
+        'mosaico': ee.Image mediana limpa do período analisado
+        'nbr': ee.Image da camada de severidade calculada
+        'severidade_layer': ee.Image da camada de severidade
+        'tipo_severidade': chave da camada ('dnbr', 'nbr_mapbiomas' ou 'nbr')
+        'water_mask': máscara refinada de água (NDWI/SCL)
         'extent': Tuple[float, float, float, float]
         'geometry': ee.Geometry.Rectangle
-        'count': ee.Number com contagem de imagens
+        'collection': ee.ImageCollection
     """
     xmin, ymin, xmax, ymax = extent_bbox
     region = ee.Geometry.Rectangle([xmin, ymin, xmax, ymax], proj="EPSG:4326", geodesic=False)
     
+    # 1. Mosaico Pós-Fogo (Período Analisado)
     s2_col = (ee.ImageCollection(GEE_S2_COLLECTION)
                 .filterBounds(region)
                 .filterDate(data_inicio, data_fim)
@@ -141,16 +155,76 @@ def build_sentinel2_mosaics(
     
     mosaico = s2_col.median().clip(region)
     
-    # Cálculo do Normalized Burn Ratio: (B8 - B12) / (B8 + B12)
-    nbr = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
-    
     # Detecção refinada de corpos d'água (NDWI > 0 ou SCL == 6) para evitar coloração espúria de queimada na água
     ndwi = mosaico.normalizedDifference(["B3", "B8"]).rename("NDWI")
     is_water = ndwi.gt(0.0).Or(mosaico.select("SCL").round().eq(6))
     
+    metodo_clean = str(metodo_severidade).strip().upper()
+    
+    if any(k in metodo_clean for k in ["DNBR", "BITEMPORAL", "BI-TEMPORAL"]):
+        # -------------------------------------------------------------
+        # ABORDAGEM 1: dNBR Bi-temporal (Pré-Fogo vs Pós-Fogo)
+        # -------------------------------------------------------------
+        dt_start = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        dt_end = datetime.strptime(data_fim, "%Y-%m-%d").date()
+        intervalo_dias = max((dt_end - dt_start).days, dias_pre_fogo)
+        
+        dt_pre_end = dt_start
+        dt_pre_start = dt_start - timedelta(days=intervalo_dias)
+        
+        date_pre_end_str = dt_pre_end.strftime("%Y-%m-%d")
+        date_pre_start_str = dt_pre_start.strftime("%Y-%m-%d")
+        
+        print(f"  • [GEE] Calculando dNBR Bi-temporal: Pré ({date_pre_start_str} a {date_pre_end_str}) vs Pós ({data_inicio} a {data_fim})...")
+        
+        s2_pre = (ee.ImageCollection(GEE_S2_COLLECTION)
+                    .filterBounds(region)
+                    .filterDate(date_pre_start_str, date_pre_end_str)
+                    .map(clean_mask))
+        mosaico_pre = s2_pre.median().clip(region)
+        
+        nbr_pre = mosaico_pre.normalizedDifference(["B8", "B12"]).rename("NBR_PRE")
+        nbr_pos = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR_POS")
+        
+        layer_severidade = nbr_pre.subtract(nbr_pos).rename("dNBR")
+        tipo_severidade = "dnbr"
+        
+    elif any(k in metodo_clean for k in ["MAPBIOMAS", "C11"]):
+        # -------------------------------------------------------------
+        # ABORDAGEM 2: NBR com Mascaramento Fenológico MapBiomas Coleção 11
+        # -------------------------------------------------------------
+        print(f"  • [GEE] Aplicando mascaramento fenológico com MapBiomas Coleção 11 ({MAPBIOMAS_YEAR_DEFAULT})...")
+        nbr_raw = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
+        
+        try:
+            mb_img = ee.Image(MAPBIOMAS_C11_ASSET).select(f"classification_{MAPBIOMAS_YEAR_DEFAULT}").clip(region)
+            # Classes não florestais do MapBiomas que sofrem senescência estacional no Pará:
+            # 11 = Campo Alagável e Área Pantanosa (Marajó)
+            # 12 = Formação Campestre (Savanas/Cerrado)
+            # 15 = Pastagem
+            # 21 = Mosaico de Usos
+            is_campo = mb_img.eq(11).Or(mb_img.eq(12)).Or(mb_img.eq(15)).Or(mb_img.eq(21))
+            
+            # Mascaramento inteligente: em campo natural/savana, se o NBR estiver na faixa
+            # de senescência natural (>= -0.22), normaliza para patamar neutro (0.05).
+            # Apenas se NBR < -0.22 (cinza e carvão profundo de queima real) aparece como fogo!
+            layer_severidade = nbr_raw.where(is_campo.And(nbr_raw.gte(-0.22)), ee.Image.constant(0.05)).rename("NBR_MAPBIOMAS")
+        except Exception as e:
+            print(f"  ! Aviso: Falha ao carregar MapBiomas C11 ({e}). Usando NBR calibrado.")
+            layer_severidade = nbr_raw
+            
+        tipo_severidade = "nbr_mapbiomas"
+        
+    else:
+        # NBR Clássico Unitemporal
+        layer_severidade = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
+        tipo_severidade = "nbr"
+    
     return {
         "mosaico": mosaico,
-        "nbr": nbr,
+        "nbr": layer_severidade,
+        "severidade_layer": layer_severidade,
+        "tipo_severidade": tipo_severidade,
         "water_mask": is_water,
         "extent": (xmin, ymin, xmax, ymax),
         "geometry": region,

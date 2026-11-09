@@ -300,10 +300,44 @@ def render_mapa_prancha(
     
     ax_main.grid(True, linestyle="--", alpha=0.45, color="white", linewidth=0.6, zorder=25)
     
-    # 4.2. Legenda Cartográfica Flutuante de Severidade do Fogo (NBR)
-    if "nbr" in tipo_basemap.lower() or "severidade" in tipo_basemap.lower():
+    # 4.2. Legenda Cartográfica Flutuante de Severidade do Fogo (dNBR / MapBiomas / NBR)
+    tipo_l = tipo_basemap.lower()
+    is_severidade = any(k in tipo_l for k in ["nbr", "dnbr", "severidade", "mapbiomas"])
+    
+    if is_severidade:
+        if "dnbr" in tipo_l or "bi-temporal" in tipo_l:
+            titulo_leg_sev = "Severidade do Fogo (dNBR)"
+            classes_sev = [
+                ("#7F0000", "Alta Severidade (dNBR > 0.44)"),
+                ("#D73027", "Mod.-Alta Severidade (0.27 a 0.44)"),
+                ("#FDAE61", "Baixa Severidade (0.10 a 0.27)"),
+                ("#A6D96A", "Não Queimado / Estável (-0.10 a 0.10)"),
+                ("#1A9641", "Rebrota Vegetal (< -0.10)"),
+                ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
+            ]
+        elif "mapbiomas" in tipo_l:
+            titulo_leg_sev = "Severidade (MapBiomas C11)"
+            classes_sev = [
+                ("#7F0000", "Queimada Severa (< -0.20)"),
+                ("#D9534F", "Queimada Moderada (Florestas)"),
+                ("#FAD7A0", "Campos do Marajó / Savana"),
+                ("#27AE60", "Floresta Preservada (> 0.38)"),
+                ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
+            ]
+        else:
+            titulo_leg_sev = "Severidade do Fogo (NBR)"
+            classes_sev = [
+                ("#7F0000", "Queimada Severa (< -0.20)"),
+                ("#D9534F", "Queimada Moderada (-0.20 a -0.08)"),
+                ("#FAD7A0", "Campos / Cerrado / Solo (-0.08 a 0.18)"),
+                ("#82E0AA", "Veg. Herbácea / Transição (0.18 a 0.38)"),
+                ("#1E8449", "Floresta Preservada (> 0.38)"),
+                ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
+            ]
+
+        h_box = 0.32 if len(classes_sev) >= 6 else 0.27
         rec_nbr_leg = mpatches.FancyBboxPatch(
-            (0.67, 0.67), 0.315, 0.31,
+            (0.665, 0.98 - h_box), 0.320, h_box,
             boxstyle="square,pad=0.01",
             transform=ax_main.transAxes,
             facecolor="#FFFFFF", edgecolor="#2C3E50",
@@ -311,30 +345,22 @@ def render_mapa_prancha(
         )
         ax_main.add_patch(rec_nbr_leg)
         
-        ax_main.text(0.827, 0.962, "Severidade do Fogo (NBR)",
+        ax_main.text(0.825, 0.962, titulo_leg_sev,
                      transform=ax_main.transAxes, ha="center", va="top",
                      fontsize=6.8, fontweight="bold", color="#1B2631", zorder=51)
                      
-        nbr_classes = [
-            ("#7F0000", "Queimada Severa (< -0.20)"),
-            ("#D9534F", "Queimada Moderada (-0.20 a -0.08)"),
-            ("#FAD7A0", "Campos / Cerrado / Solo (-0.08 a 0.18)"),
-            ("#82E0AA", "Veg. Herbácea / Transição (0.18 a 0.38)"),
-            ("#1E8449", "Floresta Preservada (> 0.38)"),
-            ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
-        ]
-        y_swatch_start = 0.918
-        for i, (cor, label_cls) in enumerate(nbr_classes):
+        y_swatch_start = 0.920
+        for i, (cor, label_cls) in enumerate(classes_sev):
             y_cls = y_swatch_start - (i * 0.038)
             patch_cls = mpatches.Rectangle(
-                (0.685, y_cls - 0.012), 0.024, 0.024,
+                (0.680, y_cls - 0.012), 0.024, 0.024,
                 transform=ax_main.transAxes,
                 facecolor=cor, edgecolor="#333333", linewidth=0.5, zorder=51
             )
             ax_main.add_patch(patch_cls)
-            ax_main.text(0.722, y_cls, label_cls,
+            ax_main.text(0.718, y_cls, label_cls,
                          transform=ax_main.transAxes, ha="left", va="center",
-                         fontsize=5.4, fontweight="semibold", color="#2C3E50", zorder=51)
+                         fontsize=5.3, fontweight="semibold", color="#2C3E50", zorder=51)
 
     # Moldura no topo (zorder=100)
     for spine in ax_main.spines.values():

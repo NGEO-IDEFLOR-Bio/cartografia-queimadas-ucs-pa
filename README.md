@@ -22,7 +22,10 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
 * **Três Variantes Cartográficas Automáticas:**
   1. **Falsa Cor (SWIR-NIR-Red: B12, B8, B4):** Realce máximo de frentes de fogo e cicatrizes recentes.
   2. **Cor Natural (RGB: B4, B3, B2):** Visão limpa de relevo e vegetação.
-  3. **NBR (Normalized Burn Ratio):** Índice espectral normalizado $\frac{\text{B8} - \text{B12}}{\text{B8} + \text{B12}}$ mapeando severidade do fogo.
+  3. **Severidade do Fogo (Opções Escolhíveis):**
+     - **dNBR Bi-temporal (Pré vs Pós — Padrão USGS/MTBS):** Avalia a perda real de biomassa contra o mosaico pré-fogo, imune a falsos positivos em campos naturais do Marajó e cerrado/savana.
+     - **MapBiomas Coleção 11:** Mascaramento fenológico inteligente com a Coleção 11 oficial de cobertura da terra (`projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3`).
+     - **NBR Clássico:** Índice espectral unitemporal calibrado.
 * **Cobertura Orbital de 100% da Área Visível:** O cálculo da extensão do mosaico Sentinel-2 expande e ajusta o *bounding box* ao *aspect ratio* exato do quadro do mapa principal ($155 \times 124\text{ mm}$), garantindo que a imagem preencha todo o viewport sem lacunas ou bordas pretas.
 * **Pranchas em Alta Resolução (300 DPI):** Exportação direta em formato raster (PNG 300 DPI) para relatórios e vetorial (PDF) para anexação em processos administrativos (PAe/SEI).
 * **Geração Automática de Relatório Técnico Oficial (.docx):** Produção instantânea do documento Word oficial no padrão institucional do NGEO/IDEFLOR-Bio, integrando tabelas quantitativas de focos, sensores orbitais, fundamentação metodológica e subsídios táticos para pronta tomada de decisão ambiental e fiscalização.
