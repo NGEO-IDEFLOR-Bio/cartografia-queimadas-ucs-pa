@@ -316,11 +316,11 @@ def gerar_mapa_interativo_folium(
     # Assegurar WGS84 para renderização web
     ucs_wgs = gdf_ucs_ranking.to_crs(CRS_WGS84) if gdf_ucs_ranking.crs != CRS_WGS84 else gdf_ucs_ranking
     
-    # Criar Mapa Base centrado no Pará
+    # Criar Mapa Base centrado no Pará com OpenStreetMap nativo gratuito
     m = folium.Map(
         location=[-3.7, -52.4],
         zoom_start=6,
-        tiles="CartoDB positron",
+        tiles="OpenStreetMap",
         control_scale=True
     )
     
@@ -329,7 +329,6 @@ def gerar_mapa_interativo_folium(
         attr="Esri World Imagery",
         name="Satélite (Esri World Imagery)"
     ).add_to(m)
-    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
 
     # Função de estilo dos polígonos das UCs
     def style_uc(feature):
@@ -350,21 +349,44 @@ def gerar_mapa_interativo_folium(
             "fillOpacity": opac
         }
 
+    # Seleção defensiva de campos disponíveis para evitar erros de colunas
+    candidatos_tooltip = [
+        ("Nome", "UC:"),
+        ("Alerta", "Status:"),
+        ("Total Focos", "Total Focos:"),
+        ("Focos Recentes (< 48h)", "Ativos (< 48h):"),
+        ("FRP Máximo (MW)", "FRP Máx (MW):")
+    ]
+    tooltip_fields = [c for c, _ in candidatos_tooltip if c in ucs_wgs.columns]
+    tooltip_aliases = [alias for c, alias in candidatos_tooltip if c in ucs_wgs.columns]
+
+    candidatos_popup = [
+        ("Nome", "UC"),
+        ("Categoria", "Categoria"),
+        ("Alerta", "Alerta"),
+        ("Total Focos", "Total de Focos"),
+        ("Focos Recentes (< 48h)", "Focos Ativos (< 48h)"),
+        ("FRP Máximo (MW)", "FRP Máx (MW)"),
+        ("Municípios Atingidos", "Municípios")
+    ]
+    popup_fields = [c for c, _ in candidatos_popup if c in ucs_wgs.columns]
+    popup_aliases = [alias for c, alias in candidatos_popup if c in ucs_wgs.columns]
+
     # Adicionar camada vetorial das 29 UCs
     ucs_geojson = folium.GeoJson(
         ucs_wgs,
         name="Status das 29 UCs Estaduais",
         style_function=style_uc,
         tooltip=folium.GeoJsonTooltip(
-            fields=["Nome", "Alerta", "Total Focos", "Focos Recentes (< 48h)", "FRP Máximo (MW)"],
-            aliases=["UC:", "Status:", "Total Focos:", "Ativos (< 48h):", "FRP Máx (MW):"],
+            fields=tooltip_fields,
+            aliases=tooltip_aliases,
             localize=True
-        ),
+        ) if tooltip_fields else None,
         popup=folium.GeoJsonPopup(
-            fields=["Nome", "Categoria", "Alerta", "Total Focos", "Focos Recentes (< 48h)", "FRP Máximo (MW)", "Municípios Atingidos"],
-            aliases=["UC", "Categoria", "Alerta", "Total de Focos", "Focos Ativos (< 48h)", "FRP Máx (MW)", "Municípios"],
+            fields=popup_fields,
+            aliases=popup_aliases,
             labels=True
-        )
+        ) if popup_fields else None
     ).add_to(m)
 
     # Adicionar Focos de Calor se existirem
@@ -570,8 +592,9 @@ def executar_triagem_focos_ucs(
     df_ranking.drop(columns=["prioridade"], inplace=True)
     df_ranking.reset_index(drop=True, inplace=True)
     
-    # 6. Unir com Geometrias para Exportações
-    gdf_ucs_ranking = gdf_ucs.merge(df_ranking, on="Nome", how="left")
+    # 6. Unir com Geometrias para Exportações evitando duplicidade de colunas (ex: Categoria, Grupo)
+    cols_ranking_novas = [c for c in df_ranking.columns if c not in gdf_ucs.columns or c == "Nome"]
+    gdf_ucs_ranking = gdf_ucs.merge(df_ranking[cols_ranking_novas], on="Nome", how="left")
     
     # 7. Criar Diretório de Saída
     out_dir_path = Path(out_dir)
