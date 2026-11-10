@@ -8,9 +8,11 @@ realiza a interseção espacial com as 29 Unidades de Conservação Estaduais
 e gera um quadro tático de inteligência com:
 1. Ranqueamento de emergência (Crítico, Alerta, Atenção, Normal);
 2. Tabela consolidada com contagem, FRP máximo e municípios atingidos;
-3. Planilha executiva em Excel (.xlsx) com auto-filtro e focos detalhados;
-4. Pacote KML estadual para Google Earth com polígonos coloridos por alerta;
-5. Lista de UCs prioritárias pronta para alimentar o gerador cartográfico.
+3. Boletim Executivo em PDF oficial de 1 página com timbre institucional;
+4. Planilha executiva em Excel (.xlsx) com auto-filtro e focos detalhados;
+5. Pacote KML estadual para Google Earth com simbologia limpa (sem rótulos de texto poluídos);
+6. Mapa interativo enriquecido (Folium) com satélite, divisas municipais e focos;
+7. Lista de UCs prioritárias pronta para alimentar o gerador cartográfico.
 """
 
 from datetime import datetime, date, timedelta
@@ -24,6 +26,7 @@ from shapely.geometry import Point, Polygon, MultiPolygon
 
 from src.config import (
     FILE_UCS_ESTADUAIS, FILE_MUNICIPIOS, RAW_DIR, OUTPUTS_DIR,
+    FILE_BRASAO_PARA, FILE_LOGO_IDEFLOR, FILE_LOGO_NGEO,
     CRS_GEOGRAFICO, CRS_WGS84,
     FOCOS_ANTERIORES_FILL, FOCOS_ANTERIORES_STROKE,
     FOCOS_RECENTES_FILL, FOCOS_RECENTES_STROKE
@@ -136,6 +139,8 @@ def exportar_kml_triagem(
 ) -> Path:
     """
     Exporta o mapa de triagem do Pará em formato KML com as 29 UCs estilizadas por severidade.
+    Configura scale=0 nos rótulos de texto para manter a tela limpa no Google Earth,
+    exibindo apenas a simbologia vetorial dos polígonos e ícones, mantendo popups completos.
     """
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -150,32 +155,36 @@ def exportar_kml_triagem(
         f'  <name>Triagem Geral de Focos em UCs – {periodo_str}</name>',
         f'  <description>Núcleo de Geotecnologias (NGEO / IDEFLOR-Bio) - Monitoramento de Focos de Calor</description>',
         '',
-        '  <!-- Estilos por Nível de Alerta das UCs -->',
-        '  <!-- Cores em KML: aabbggrr (Alpha, Blue, Green, Red) -->',
+        '  <!-- Estilos por Nível de Alerta das UCs (scale=0 nos rótulos para não poluir o mapa 3D) -->',
         '  <Style id="uc_critico">',
         '    <LineStyle><color>ff191180</color><width>2.5</width></LineStyle>',
         '    <PolyStyle><color>401911d3</color><fill>1</fill><outline>1</outline></PolyStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         '  <Style id="uc_alerta">',
         '    <LineStyle><color>ff0055d8</color><width>2.2</width></LineStyle>',
         '    <PolyStyle><color>40007cf5</color><fill>1</fill><outline>1</outline></PolyStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         '  <Style id="uc_atencao">',
         '    <LineStyle><color>ff15b3b3</color><width>2.0</width></LineStyle>',
         '    <PolyStyle><color>402dc0fb</color><fill>1</fill><outline>1</outline></PolyStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         '  <Style id="uc_normal">',
         '    <LineStyle><color>ff208038</color><width>1.5</width></LineStyle>',
         '    <PolyStyle><color>20208038</color><fill>1</fill><outline>1</outline></PolyStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         '',
-        '  <!-- Estilos de Focos -->',
+        '  <!-- Estilos de Focos (scale=0 nos rótulos de texto: ícones limpos sem texto sobreposto) -->',
         '  <Style id="foco_recente">',
         '    <IconStyle>',
         '      <scale>0.9</scale>',
         '      <Icon><href>http://maps.google.com/mapfiles/kml/shapes/firedept.png</href></Icon>',
         '      <color>ff1911db</color>',
         '    </IconStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         '  <Style id="foco_anterior">',
         '    <IconStyle>',
@@ -183,6 +192,7 @@ def exportar_kml_triagem(
         '      <Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon>',
         '      <color>ff39fffa</color>',
         '    </IconStyle>',
+        '    <LabelStyle><scale>0</scale></LabelStyle>',
         '  </Style>',
         ''
     ]
@@ -199,7 +209,7 @@ def exportar_kml_triagem(
         tot = int(row.get("Total Focos", 0))
         rec = int(row.get("Focos Recentes (< 48h)", 0))
         ant = int(row.get("Focos Anteriores", 0))
-        frp_max = row.get("FRP Máximo (MW)", 0.0)
+        frp_max = float(row.get("FRP Máximo (MW)", 0.0) or 0.0)
         mun = _escape_xml(row.get("Municípios Atingidos", "Nenhum"))
         cat = _escape_xml(row.get("Categoria", "UC Estadual"))
         
@@ -216,7 +226,7 @@ def exportar_kml_triagem(
             continue
             
         balloon_html = (
-            f"<h3>{badge} - {nome_uc}</h3>"
+            f"<h3>[{badge}] - {nome_uc}</h3>"
             f"<table border='1' cellpadding='4' cellspacing='0' style='font-family:Arial; font-size:12px; border-collapse:collapse;'>"
             f"<tr><td bgcolor='#f2f2f2'><b>Categoria:</b></td><td>{cat}</td></tr>"
             f"<tr><td bgcolor='#f2f2f2'><b>Total de Focos:</b></td><td><b>{tot}</b></td></tr>"
@@ -304,11 +314,12 @@ def gerar_mapa_interativo_folium(
     output_html: Optional[Union[str, Path]] = None
 ):
     """
-    Gera mapa interativo Folium para visualização das 29 UCs e dos focos de calor.
+    Gera mapa interativo Folium enriquecido com satélite, divisas municipais e focos.
+    Utiliza camadas estáveis da Esri e CartoDB para evitar bloqueios de política de uso do OpenStreetMap.
     """
     try:
         import folium
-        from folium.plugins import MarkerCluster
+        from folium.plugins import MarkerCluster, Fullscreen
     except ImportError:
         print("[!] Folium não instalado. Pulando geração do mapa HTML interativo.")
         return None
@@ -316,21 +327,56 @@ def gerar_mapa_interativo_folium(
     # Assegurar WGS84 para renderização web
     ucs_wgs = gdf_ucs_ranking.to_crs(CRS_WGS84) if gdf_ucs_ranking.crs != CRS_WGS84 else gdf_ucs_ranking
     
-    # Criar Mapa Base centrado no Pará com OpenStreetMap nativo gratuito
+    # 1. Mapa Base usando Esri World Imagery (satélite oficial gratuito e estável)
     m = folium.Map(
         location=[-3.7, -52.4],
         zoom_start=6,
-        tiles="OpenStreetMap",
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri World Imagery",
+        name="Satélite (Esri World Imagery)",
         control_scale=True
     )
     
+    # Camadas alternativas
     folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri World Imagery",
-        name="Satélite (Esri World Imagery)"
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri World Street Map",
+        name="Ruas e Limites (Esri Street Map)"
+    ).add_to(m)
+    
+    folium.TileLayer(
+        tiles="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        attr="&copy; OpenStreetMap &copy; CARTO",
+        name="CartoDB Positron (Claro)"
     ).add_to(m)
 
-    # Função de estilo dos polígonos das UCs
+    # 2. Camada de Divisas Municipais do Pará (para contexto tático igual ao KML)
+    if FILE_MUNICIPIOS.exists():
+        try:
+            gdf_muns = gpd.read_file(FILE_MUNICIPIOS)
+            muns_wgs = gdf_muns.to_crs(CRS_WGS84) if gdf_muns.crs != CRS_WGS84 else gdf_muns
+            col_mun = "NM_MUN" if "NM_MUN" in muns_wgs.columns else ("municipio" if "municipio" in muns_wgs.columns else None)
+            
+            folium.GeoJson(
+                muns_wgs,
+                name="Divisas Municipais do Pará",
+                show=False,
+                style_function=lambda x: {
+                    "fillColor": "transparent",
+                    "fillOpacity": 0.0,
+                    "color": "#BDC3C7",
+                    "weight": 0.8,
+                    "dashArray": "3, 4"
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=[col_mun],
+                    aliases=["Município:"]
+                ) if col_mun else None
+            ).add_to(m)
+        except Exception as e:
+            print(f"[!] Aviso: Não foi possível carregar a malha municipal no mapa: {e}")
+
+    # 3. Função de estilo dos polígonos das 29 UCs
     def style_uc(feature):
         props = feature["properties"]
         alerta = props.get("nivel_alerta", "NORMAL")
@@ -341,7 +387,7 @@ def gerar_mapa_interativo_folium(
             "NORMAL": "#2E7D32"
         }
         cor = cores.get(alerta, "#2E7D32")
-        opac = 0.45 if alerta in ["CRÍTICO", "ALERTA"] else 0.20
+        opac = 0.45 if alerta in ["CRÍTICO", "ALERTA"] else 0.22
         return {
             "fillColor": cor,
             "color": cor,
@@ -349,7 +395,7 @@ def gerar_mapa_interativo_folium(
             "fillOpacity": opac
         }
 
-    # Seleção defensiva de campos disponíveis para evitar erros de colunas
+    # Seleção defensiva de campos disponíveis
     candidatos_tooltip = [
         ("Nome", "UC:"),
         ("Alerta", "Status:"),
@@ -372,10 +418,10 @@ def gerar_mapa_interativo_folium(
     popup_fields = [c for c, _ in candidatos_popup if c in ucs_wgs.columns]
     popup_aliases = [alias for c, alias in candidatos_popup if c in ucs_wgs.columns]
 
-    # Adicionar camada vetorial das 29 UCs
-    ucs_geojson = folium.GeoJson(
+    # Camada vetorial das 29 UCs
+    folium.GeoJson(
         ucs_wgs,
-        name="Status das 29 UCs Estaduais",
+        name="29 UCs Estaduais (por Alerta)",
         style_function=style_uc,
         tooltip=folium.GeoJsonTooltip(
             fields=tooltip_fields,
@@ -389,14 +435,14 @@ def gerar_mapa_interativo_folium(
         ) if popup_fields else None
     ).add_to(m)
 
-    # Adicionar Focos de Calor se existirem
+    # 4. Adicionar Focos de Calor Recentes e Pretéritos
     if gdf_focos_ucs is not None and not gdf_focos_ucs.empty:
         focos_wgs = gdf_focos_ucs.to_crs(CRS_WGS84) if gdf_focos_ucs.crs != CRS_WGS84 else gdf_focos_ucs
         
         # Grupo de Focos Recentes (< 48h)
         focos_rec = focos_wgs[focos_wgs["status_foco"] == "Recente (< 48h)"]
         if not focos_rec.empty:
-            cluster_rec = MarkerCluster(name=f"Focos Recentes (&lt; 48h) [{len(focos_rec)}]")
+            cluster_rec = MarkerCluster(name=f"Focos Ativos (&lt; 48h) [{len(focos_rec)}]")
             for _, row in focos_rec.iterrows():
                 pt = row.geometry
                 if not isinstance(pt, Point):
@@ -410,7 +456,7 @@ def gerar_mapa_interativo_folium(
                 popup_txt = f"<b>Fogo Ativo (&lt; 48h)</b><br/><b>UC:</b> {uc_pt}<br/><b>Mun:</b> {mun_pt}<br/><b>Sat:</b> {sat}<br/><b>Data/Hora:</b> {dh}<br/><b>FRP:</b> {frp:.1f} MW"
                 folium.CircleMarker(
                     location=[pt.y, pt.x],
-                    radius=5,
+                    radius=5.5,
                     color="#801119",
                     weight=1.5,
                     fill=True,
@@ -420,6 +466,56 @@ def gerar_mapa_interativo_folium(
                 ).add_to(cluster_rec)
             cluster_rec.add_to(m)
 
+        # Grupo de Focos Pretéritos no Período
+        focos_ant = focos_wgs[focos_wgs["status_foco"] != "Recente (< 48h)"]
+        if not focos_ant.empty:
+            cluster_ant = MarkerCluster(name=f"Focos Pretéritos [{len(focos_ant)}]", show=False)
+            for _, row in focos_ant.iterrows():
+                pt = row.geometry
+                if not isinstance(pt, Point):
+                    continue
+                dh = row.get("data_hora_gmt", "")
+                sat = row.get("satelite", "")
+                frp = float(row.get("frp", 0.0) or 0.0)
+                uc_pt = row.get("Nome", "")
+                mun_pt = row.get("municipio", "")
+                
+                popup_txt = f"<b>Foco Pretérito</b><br/><b>UC:</b> {uc_pt}<br/><b>Mun:</b> {mun_pt}<br/><b>Sat:</b> {sat}<br/><b>Data/Hora:</b> {dh}<br/><b>FRP:</b> {frp:.1f} MW"
+                folium.CircleMarker(
+                    location=[pt.y, pt.x],
+                    radius=4.5,
+                    color="#B35C15",
+                    weight=1.2,
+                    fill=True,
+                    fill_color="#FAFF39",
+                    fill_opacity=0.85,
+                    popup=folium.Popup(popup_txt, max_width=300)
+                ).add_to(cluster_ant)
+            cluster_ant.add_to(m)
+
+    # 5. Legenda Flutuante em HTML no Canto Inferior Direito
+    legenda_html = """
+    <div style="
+        position: fixed; 
+        bottom: 25px; right: 25px; width: 220px;
+        background-color: white; border: 1.5px solid #BDC3C7;
+        z-index: 9999; font-size: 11px; font-family: Arial, sans-serif;
+        padding: 10px; border-radius: 6px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    ">
+        <b>Níveis de Severidade (UCs)</b><br/>
+        <i style="background:#D32F2F; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>CRÍTICO</b> (&ge; 100 focos)<br/>
+        <i style="background:#F57C00; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>ALERTA</b> (10 a 99 focos)<br/>
+        <i style="background:#FBC02D; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>ATENÇÃO</b> (1 a 9 focos)<br/>
+        <i style="background:#2E7D32; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>NORMAL</b> (0 focos)<br/>
+        <hr style="margin:6px 0; border:0; border-top:1px solid #ccc;"/>
+        <b>Focos de Calor</b><br/>
+        <i style="background:#DB1E2A; width:10px; height:10px; display:inline-block; border-radius:50%; border:1px solid #801119; margin-right:4px;"></i> Ativos (&lt; 48h)<br/>
+        <i style="background:#FAFF39; width:10px; height:10px; display:inline-block; border-radius:50%; border:1px solid #B35C15; margin-right:4px;"></i> Pretéritos no período<br/>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legenda_html))
+
+    Fullscreen(position="topleft").add_to(m)
     folium.LayerControl(collapsed=False).add_to(m)
 
     if output_html:
@@ -429,6 +525,210 @@ def gerar_mapa_interativo_folium(
         print(f"[+] Mapa interativo Folium salvo: {out_html_path.name}")
 
     return m
+
+
+def gerar_boletim_pdf(
+    df_ranking: pd.DataFrame,
+    periodo_str: str,
+    total_focos_pa: int,
+    total_focos_ucs: int,
+    output_path: Union[str, Path]
+) -> Path:
+    """
+    Gera o Boletim Executivo de Queimadas em PDF oficial de EXATAMENTE 1 página A4 Paisagem,
+    com cabeçalho institucional (timbre do Estado, IDEFLOR-Bio e NGEO), barra de KPIs,
+    tabela consolidada das 29 UCs e rodapé com link oficial do repositório.
+    """
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    
+    out_file = Path(output_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    page_width, page_height = landscape(A4)
+    margin = 8 * mm
+    doc = SimpleDocTemplate(
+        str(out_file),
+        pagesize=landscape(A4),
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=margin,
+        bottomMargin=margin
+    )
+    
+    styles = getSampleStyleSheet()
+    style_th = ParagraphStyle(
+        'TH', fontName='Helvetica-Bold', fontSize=6.5, leading=7.5,
+        alignment=1, textColor=colors.whitesmoke
+    )
+    style_td = ParagraphStyle(
+        'TD', fontName='Helvetica', fontSize=6, leading=7.5,
+        alignment=0, textColor=colors.HexColor('#222222')
+    )
+    style_td_c = ParagraphStyle(
+        'TDC', fontName='Helvetica', fontSize=6, leading=7.5,
+        alignment=1, textColor=colors.HexColor('#222222')
+    )
+    style_td_b = ParagraphStyle(
+        'TDB', fontName='Helvetica-Bold', fontSize=6, leading=7.5,
+        alignment=1, textColor=colors.HexColor('#222222')
+    )
+    
+    elements = []
+    usable_w = page_width - 2 * margin
+    
+    # 1. Cabeçalho com 3 Logotipos e Título Oficial
+    img_brasao = RLImage(str(FILE_BRASAO_PARA), width=28*mm, height=12*mm) if FILE_BRASAO_PARA.exists() else ""
+    img_ideflor = RLImage(str(FILE_LOGO_IDEFLOR), width=32*mm, height=12*mm) if FILE_LOGO_IDEFLOR.exists() else ""
+    img_ngeo = RLImage(str(FILE_LOGO_NGEO), width=24*mm, height=12*mm) if FILE_LOGO_NGEO.exists() else ""
+    
+    title_p = Paragraph(
+        "<para align='center'>"
+        "<b><font size='8' color='#1B4F72'>GOVERNO DO ESTADO DO PARÁ | INSTITUTO DE DESENVOLVIMENTO FLORESTAL E DA BIODIVERSIDADE (IDEFLOR-Bio)</font></b><br/>"
+        "<b><font size='11' color='#0E6251'>BOLETIM EXECUTIVO DE TRIAGEM DE QUEIMADAS EM UCS ESTADUAIS</font></b><br/>"
+        f"<font size='7' color='#555555'>Período analisado: <b>{periodo_str}</b> | Extração: <b>BDQueimadas / INPE</b> | Datum: <b>SIRGAS 2000</b> | Núcleo de Geotecnologias (NGEO)</font>"
+        "</para>",
+        styles['Normal']
+    )
+    
+    header_table = Table(
+        [[img_brasao, title_p, img_ideflor, img_ngeo]],
+        colWidths=[30*mm, usable_w - 92*mm, 34*mm, 28*mm]
+    )
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (0,0), 'LEFT'),
+        ('ALIGN', (1,0), (1,0), 'CENTER'),
+        ('ALIGN', (2,0), (-1,-1), 'RIGHT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 2*mm))
+    
+    # 2. Barra de Síntese Executiva (KPIs)
+    n_crit = len(df_ranking[df_ranking["nivel_alerta"] == "CRÍTICO"])
+    n_alert = len(df_ranking[df_ranking["nivel_alerta"] == "ALERTA"])
+    n_atenc = len(df_ranking[df_ranking["nivel_alerta"] == "ATENÇÃO"])
+    n_norm = len(df_ranking[df_ranking["nivel_alerta"] == "NORMAL"])
+    n_com_focos = len(df_ranking[df_ranking["Total Focos"] > 0])
+    
+    kpi_html = (
+        f"<para align='center' size='7'>"
+        f"<b>Focos Totais no Pará:</b> {total_focos_pa:,} &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<b>Focos nas 29 UCs Estaduais:</b> {total_focos_ucs:,} &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<b>UCs com Focos:</b> {n_com_focos} de 29 &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<font color='#B71C1C'><b>CRÍTICO (&gt;=100):</b> {n_crit}</font> &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<font color='#E65100'><b>ALERTA (10-99):</b> {n_alert}</font> &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<font color='#F57F17'><b>ATENÇÃO (1-9):</b> {n_atenc}</font> &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"<font color='#2E7D32'><b>NORMAL (0):</b> {n_norm}</font>"
+        f"</para>"
+    )
+    kpi_p = Paragraph(kpi_html, styles['Normal'])
+    kpi_table = Table([[kpi_p]], colWidths=[usable_w])
+    kpi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F2F4F4')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#BDC3C7')),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+    ]))
+    elements.append(kpi_table)
+    elements.append(Spacer(1, 2*mm))
+    
+    # 3. Tabela Principal das 29 UCs Estaduais
+    headers = [
+        Paragraph("<b>#</b>", style_th),
+        Paragraph("<b>Status</b>", style_th),
+        Paragraph("<b>Unidade de Conservação</b>", style_th),
+        Paragraph("<b>Categoria</b>", style_th),
+        Paragraph("<b>Total Focos</b>", style_th),
+        Paragraph("<b>Ativos (&lt;48h)</b>", style_th),
+        Paragraph("<b>Pretéritos</b>", style_th),
+        Paragraph("<b>FRP Máx (MW)</b>", style_th),
+        Paragraph("<b>Municípios Atingidos / Contexto</b>", style_th),
+    ]
+    
+    col_w = [8*mm, 18*mm, 78*mm, 35*mm, 18*mm, 20*mm, 16*mm, 20*mm, usable_w - 213*mm]
+    table_data = [headers]
+    row_bg_styles = []
+    
+    for idx, row in df_ranking.iterrows():
+        r_idx = idx + 1
+        alerta = str(row.get("nivel_alerta", "NORMAL"))
+        nome_uc = str(row.get("Unidade de Conservação", ""))
+        cat = str(row.get("Categoria", ""))
+        tot = int(row.get("Total Focos", 0))
+        rec = int(row.get("Focos Recentes (< 48h)", 0))
+        ant = int(row.get("Focos Anteriores", 0))
+        frp_max = float(row.get("FRP Máximo (MW)", 0.0) or 0.0)
+        muns = str(row.get("Municípios Atingidos", "Nenhum"))
+        if len(muns) > 65:
+            muns = muns[:62] + "..."
+            
+        badge_style = ParagraphStyle(
+            f'Badge_{idx}', fontName='Helvetica-Bold', fontSize=5.5, leading=7, alignment=1
+        )
+        if alerta == "CRÍTICO":
+            badge_p = Paragraph(f"<font color='#B71C1C'><b>CRÍTICO</b></font>", badge_style)
+            row_bg_styles.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#FDEDEC')))
+        elif alerta == "ALERTA":
+            badge_p = Paragraph(f"<font color='#E65100'><b>ALERTA</b></font>", badge_style)
+            row_bg_styles.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#FEF9E7')))
+        elif alerta == "ATENÇÃO":
+            badge_p = Paragraph(f"<font color='#9A7D0A'><b>ATENÇÃO</b></font>", badge_style)
+            row_bg_styles.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#FEFDE8')))
+        else:
+            badge_p = Paragraph(f"<font color='#1E8449'>NORMAL</font>", badge_style)
+            if idx % 2 == 1:
+                row_bg_styles.append(('BACKGROUND', (0, r_idx), (-1, r_idx), colors.HexColor('#F8F9F9')))
+                
+        table_data.append([
+            Paragraph(f"{idx+1}", style_td_c),
+            badge_p,
+            Paragraph(nome_uc, style_td),
+            Paragraph(cat, style_td),
+            Paragraph(f"<b>{tot:,}</b>" if tot > 0 else "0", style_td_b if tot > 0 else style_td_c),
+            Paragraph(f"<font color='#B71C1C'><b>{rec:,}</b></font>" if rec > 0 else "0", style_td_b if rec > 0 else style_td_c),
+            Paragraph(f"{ant:,}", style_td_c),
+            Paragraph(f"{frp_max:.1f}" if frp_max > 0 else "-", style_td_c),
+            Paragraph(muns, style_td),
+        ])
+        
+    main_table = Table(table_data, colWidths=col_w, repeatRows=1)
+    
+    t_style = [
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1B4F72')),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#BDC3C7')),
+        ('TOPPADDING', (0,0), (-1,-1), 1.2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 1.2),
+        ('LEFTPADDING', (0,0), (-1,-1), 2),
+        ('RIGHTPADDING', (0,0), (-1,-1), 2),
+    ] + row_bg_styles
+    
+    main_table.setStyle(TableStyle(t_style))
+    elements.append(main_table)
+    elements.append(Spacer(1, 1.5*mm))
+    
+    # 4. Rodapé Institucional com Link do Repositório
+    footer_p = Paragraph(
+        "<para align='center' size='5.5' color='#555555'>"
+        "<b>Núcleo de Geotecnologias (NGEO / IDEFLOR-Bio)</b> &nbsp;|&nbsp; "
+        "Relatório executivo gerado automaticamente para suporte à decisão operacional e fiscalização ambiental &nbsp;|&nbsp; "
+        "Código-fonte e documentação: <u>https://github.com/NGEO-IDEFLOR-Bio/cartografia-queimadas-ucs-pa</u>"
+        "</para>",
+        styles['Normal']
+    )
+    elements.append(footer_p)
+    
+    doc.build(elements)
+    return out_file
 
 
 def executar_triagem_focos_ucs(
@@ -507,7 +807,6 @@ def executar_triagem_focos_ucs(
         
         if not gdf_join.empty:
             # Classificação temporal (recente < 48h vs pretérito)
-            # Definir ponto de corte
             now = datetime.now()
             cutoff_48h = now - timedelta(hours=48)
             
@@ -600,23 +899,33 @@ def executar_triagem_focos_ucs(
     out_dir_path = Path(out_dir)
     out_dir_path.mkdir(parents=True, exist_ok=True)
     
-    # 8. Exportar Planilha Excel (.xlsx)
+    # 8. Exportar Boletim Executivo em PDF Oficial de 1 Página
+    pdf_path = out_dir_path / f"boletim_triagem_focos_ucs_{periodo_str}.pdf"
+    total_focos_ucs = int(df_ranking["Total Focos"].sum())
+    total_focos_pa = len(gdf_focos_pa) if gdf_focos_pa is not None else 0
+    try:
+        gerar_boletim_pdf(df_ranking, f"{data_inicio} até {data_fim}", total_focos_pa, total_focos_ucs, pdf_path)
+        print(f"[+] Boletim executivo PDF (1 página) gerado: {pdf_path.name}")
+    except Exception as e:
+        print(f"[!] Aviso: Não foi possível gerar o Boletim PDF: {e}")
+        pdf_path = None
+    
+    # 9. Exportar Planilha Excel (.xlsx)
     xlsx_path = out_dir_path / f"triagem_focos_ucs_{periodo_str}.xlsx"
     exportar_planilha_triagem(df_ranking, gdf_focos_ucs, xlsx_path, periodo_str)
     print(f"[+] Planilha de triagem gerada: {xlsx_path.name}")
     
-    # 9. Exportar KML Estadual (.kml)
+    # 10. Exportar KML Estadual (.kml com simbologia limpa)
     kml_path = out_dir_path / f"triagem_focos_ucs_{periodo_str}.kml"
     exportar_kml_triagem(gdf_ucs_ranking, gdf_focos_ucs, kml_path, periodo_str)
     print(f"[+] KML de triagem gerado: {kml_path.name}")
     
-    # 10. Gerar Mapa Interativo HTML (Folium)
+    # 11. Gerar Mapa Interativo HTML Enriquecido (Folium)
     html_path = out_dir_path / f"triagem_focos_ucs_{periodo_str}.html"
     mapa_folium = gerar_mapa_interativo_folium(gdf_ucs_ranking, gdf_focos_ucs, html_path)
     
-    # 11. Resumo Executivo no Terminal / Notebook
+    # 12. Resumo Executivo no Terminal / Notebook
     ucs_com_focos = df_ranking[df_ranking["Total Focos"] > 0]
-    total_focos_ucs = int(df_ranking["Total Focos"].sum())
     
     print("\n" + "-" * 70)
     print(f" SINTESE DO MONITORAMENTO DE QUEIMADAS NAS UCS")
@@ -638,12 +947,13 @@ def executar_triagem_focos_ucs(
     
     return {
         "periodo": (data_inicio, data_fim),
-        "total_focos_pa": len(gdf_focos_pa) if gdf_focos_pa is not None else 0,
+        "total_focos_pa": total_focos_pa,
         "total_focos_ucs": total_focos_ucs,
         "ucs_com_focos": lista_ucs_prioritarias,
         "df_ranking": df_ranking,
         "gdf_focos_ucs": gdf_focos_ucs,
         "gdf_ucs_ranking": gdf_ucs_ranking,
+        "pdf_path": pdf_path,
         "planilha_path": xlsx_path,
         "kml_path": kml_path,
         "html_path": html_path,
