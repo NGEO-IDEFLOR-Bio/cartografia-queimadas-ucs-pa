@@ -25,7 +25,7 @@ import pandas as pd
 from shapely.geometry import Point, Polygon, MultiPolygon
 
 from src.config import (
-    FILE_UCS_ESTADUAIS, FILE_MUNICIPIOS, RAW_DIR, OUTPUTS_DIR,
+    FILE_UCS_ESTADUAIS, FILE_MUNICIPIOS, FILE_ESTADO_PA, RAW_DIR, OUTPUTS_DIR,
     FILE_BRASAO_PARA, FILE_LOGO_IDEFLOR, FILE_LOGO_NGEO,
     CRS_GEOGRAFICO, CRS_WGS84,
     FOCOS_ANTERIORES_FILL, FOCOS_ANTERIORES_STROKE,
@@ -314,12 +314,12 @@ def gerar_mapa_interativo_folium(
     output_html: Optional[Union[str, Path]] = None
 ):
     """
-    Gera mapa interativo Folium enriquecido com satélite, divisas municipais e focos.
-    Utiliza camadas estáveis da Esri e CartoDB para evitar bloqueios de política de uso do OpenStreetMap.
+    Gera mapa interativo Folium enriquecido com Positron, contorno estadual,
+    divisas municipais e plotagem direta de cada foco de calor (sem agrupar em números).
     """
     try:
         import folium
-        from folium.plugins import MarkerCluster, Fullscreen
+        from folium.plugins import Fullscreen
     except ImportError:
         print("[!] Folium não instalado. Pulando geração do mapa HTML interativo.")
         return None
@@ -327,30 +327,51 @@ def gerar_mapa_interativo_folium(
     # Assegurar WGS84 para renderização web
     ucs_wgs = gdf_ucs_ranking.to_crs(CRS_WGS84) if gdf_ucs_ranking.crs != CRS_WGS84 else gdf_ucs_ranking
     
-    # 1. Mapa Base usando Esri World Imagery (satélite oficial gratuito e estável)
+    # 1. Mapa Base usando CartoDB Positron nativo via template URL direto (sem exigir chave de API)
     m = folium.Map(
         location=[-3.7, -52.4],
         zoom_start=6,
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri World Imagery",
-        name="Satélite (Esri World Imagery)",
+        tiles=None,
+        prefer_canvas=True,
         control_scale=True
     )
     
-    # Camadas alternativas
+    # Camada Positron (Padrão e limpa)
     folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri World Street Map",
-        name="Ruas e Limites (Esri Street Map)"
-    ).add_to(m)
-    
-    folium.TileLayer(
-        tiles="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        attr="&copy; OpenStreetMap &copy; CARTO",
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attr="&copy; OpenStreetMap contributors &copy; CARTO",
+        subdomains="abcd",
+        max_zoom=20,
         name="CartoDB Positron (Claro)"
     ).add_to(m)
+    
+    # Camada de Satélite Orbital (Esri World Imagery)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri World Imagery",
+        name="Satélite (Esri World Imagery)"
+    ).add_to(m)
 
-    # 2. Camada de Divisas Municipais do Pará (para contexto tático igual ao KML)
+    # 2. Contorno Oficial do Estado do Pará
+    if FILE_ESTADO_PA.exists():
+        try:
+            gdf_estado = gpd.read_file(FILE_ESTADO_PA)
+            estado_wgs = gdf_estado.to_crs(CRS_WGS84) if gdf_estado.crs != CRS_WGS84 else gdf_estado
+            folium.GeoJson(
+                estado_wgs,
+                name="Contorno do Estado do Pará",
+                style_function=lambda x: {
+                    "fillColor": "transparent",
+                    "fillOpacity": 0.0,
+                    "color": "#1B4F72",
+                    "weight": 2.5
+                },
+                tooltip=folium.GeoJsonTooltip(fields=["NM_UF"], aliases=["Estado:"]) if "NM_UF" in estado_wgs.columns else "Estado do Pará"
+            ).add_to(m)
+        except Exception as e:
+            print(f"[!] Aviso: Não foi possível carregar o contorno do Estado: {e}")
+
+    # 3. Divisas Municipais do Pará
     if FILE_MUNICIPIOS.exists():
         try:
             gdf_muns = gpd.read_file(FILE_MUNICIPIOS)
@@ -360,11 +381,11 @@ def gerar_mapa_interativo_folium(
             folium.GeoJson(
                 muns_wgs,
                 name="Divisas Municipais do Pará",
-                show=False,
+                show=True,
                 style_function=lambda x: {
                     "fillColor": "transparent",
                     "fillOpacity": 0.0,
-                    "color": "#BDC3C7",
+                    "color": "#95A5A6",
                     "weight": 0.8,
                     "dashArray": "3, 4"
                 },
@@ -376,7 +397,7 @@ def gerar_mapa_interativo_folium(
         except Exception as e:
             print(f"[!] Aviso: Não foi possível carregar a malha municipal no mapa: {e}")
 
-    # 3. Função de estilo dos polígonos das 29 UCs
+    # 4. Camada vetorial das 29 UCs Estaduais
     def style_uc(feature):
         props = feature["properties"]
         alerta = props.get("nivel_alerta", "NORMAL")
@@ -387,7 +408,7 @@ def gerar_mapa_interativo_folium(
             "NORMAL": "#2E7D32"
         }
         cor = cores.get(alerta, "#2E7D32")
-        opac = 0.45 if alerta in ["CRÍTICO", "ALERTA"] else 0.22
+        opac = 0.40 if alerta in ["CRÍTICO", "ALERTA"] else 0.18
         return {
             "fillColor": cor,
             "color": cor,
@@ -395,7 +416,6 @@ def gerar_mapa_interativo_folium(
             "fillOpacity": opac
         }
 
-    # Seleção defensiva de campos disponíveis
     candidatos_tooltip = [
         ("Nome", "UC:"),
         ("Alerta", "Status:"),
@@ -418,7 +438,6 @@ def gerar_mapa_interativo_folium(
     popup_fields = [c for c, _ in candidatos_popup if c in ucs_wgs.columns]
     popup_aliases = [alias for c, alias in candidatos_popup if c in ucs_wgs.columns]
 
-    # Camada vetorial das 29 UCs
     folium.GeoJson(
         ucs_wgs,
         name="29 UCs Estaduais (por Alerta)",
@@ -435,14 +454,14 @@ def gerar_mapa_interativo_folium(
         ) if popup_fields else None
     ).add_to(m)
 
-    # 4. Adicionar Focos de Calor Recentes e Pretéritos
+    # 5. Plotagem Direta de Cada Ponto de Calor (Sem agrupar em números / clusters)
     if gdf_focos_ucs is not None and not gdf_focos_ucs.empty:
         focos_wgs = gdf_focos_ucs.to_crs(CRS_WGS84) if gdf_focos_ucs.crs != CRS_WGS84 else gdf_focos_ucs
         
-        # Grupo de Focos Recentes (< 48h)
+        # Grupo de Focos Recentes (< 48h) em Vermelho Alerta
         focos_rec = focos_wgs[focos_wgs["status_foco"] == "Recente (< 48h)"]
         if not focos_rec.empty:
-            cluster_rec = MarkerCluster(name=f"Focos Ativos (&lt; 48h) [{len(focos_rec)}]")
+            fg_rec = folium.FeatureGroup(name=f"Focos Ativos (&lt; 48h) [{len(focos_rec)}]", show=True)
             for _, row in focos_rec.iterrows():
                 pt = row.geometry
                 if not isinstance(pt, Point):
@@ -456,20 +475,20 @@ def gerar_mapa_interativo_folium(
                 popup_txt = f"<b>Fogo Ativo (&lt; 48h)</b><br/><b>UC:</b> {uc_pt}<br/><b>Mun:</b> {mun_pt}<br/><b>Sat:</b> {sat}<br/><b>Data/Hora:</b> {dh}<br/><b>FRP:</b> {frp:.1f} MW"
                 folium.CircleMarker(
                     location=[pt.y, pt.x],
-                    radius=5.5,
+                    radius=3.5,
                     color="#801119",
-                    weight=1.5,
+                    weight=1.0,
                     fill=True,
                     fill_color="#DB1E2A",
-                    fill_opacity=0.9,
+                    fill_opacity=0.90,
                     popup=folium.Popup(popup_txt, max_width=300)
-                ).add_to(cluster_rec)
-            cluster_rec.add_to(m)
+                ).add_to(fg_rec)
+            fg_rec.add_to(m)
 
-        # Grupo de Focos Pretéritos no Período
+        # Grupo de Focos Pretéritos no Período em Amarelo/Âmbar
         focos_ant = focos_wgs[focos_wgs["status_foco"] != "Recente (< 48h)"]
         if not focos_ant.empty:
-            cluster_ant = MarkerCluster(name=f"Focos Pretéritos [{len(focos_ant)}]", show=False)
+            fg_ant = folium.FeatureGroup(name=f"Focos Pretéritos no Período [{len(focos_ant)}]", show=True)
             for _, row in focos_ant.iterrows():
                 pt = row.geometry
                 if not isinstance(pt, Point):
@@ -483,24 +502,24 @@ def gerar_mapa_interativo_folium(
                 popup_txt = f"<b>Foco Pretérito</b><br/><b>UC:</b> {uc_pt}<br/><b>Mun:</b> {mun_pt}<br/><b>Sat:</b> {sat}<br/><b>Data/Hora:</b> {dh}<br/><b>FRP:</b> {frp:.1f} MW"
                 folium.CircleMarker(
                     location=[pt.y, pt.x],
-                    radius=4.5,
+                    radius=2.5,
                     color="#B35C15",
-                    weight=1.2,
+                    weight=0.8,
                     fill=True,
                     fill_color="#FAFF39",
                     fill_opacity=0.85,
                     popup=folium.Popup(popup_txt, max_width=300)
-                ).add_to(cluster_ant)
-            cluster_ant.add_to(m)
+                ).add_to(fg_ant)
+            fg_ant.add_to(m)
 
-    # 5. Legenda Flutuante em HTML no Canto Inferior Direito
+    # 6. Legenda Flutuante em HTML no Canto Inferior Direito
     legenda_html = """
     <div style="
         position: fixed; 
-        bottom: 25px; right: 25px; width: 220px;
+        bottom: 25px; right: 25px; width: 230px;
         background-color: white; border: 1.5px solid #BDC3C7;
         z-index: 9999; font-size: 11px; font-family: Arial, sans-serif;
-        padding: 10px; border-radius: 6px; box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+        padding: 10px; border-radius: 6px; box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
     ">
         <b>Níveis de Severidade (UCs)</b><br/>
         <i style="background:#D32F2F; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>CRÍTICO</b> (&ge; 100 focos)<br/>
@@ -508,9 +527,9 @@ def gerar_mapa_interativo_folium(
         <i style="background:#FBC02D; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>ATENÇÃO</b> (1 a 9 focos)<br/>
         <i style="background:#2E7D32; width:12px; height:12px; display:inline-block; border-radius:2px; margin-right:4px;"></i> <b>NORMAL</b> (0 focos)<br/>
         <hr style="margin:6px 0; border:0; border-top:1px solid #ccc;"/>
-        <b>Focos de Calor</b><br/>
-        <i style="background:#DB1E2A; width:10px; height:10px; display:inline-block; border-radius:50%; border:1px solid #801119; margin-right:4px;"></i> Ativos (&lt; 48h)<br/>
-        <i style="background:#FAFF39; width:10px; height:10px; display:inline-block; border-radius:50%; border:1px solid #B35C15; margin-right:4px;"></i> Pretéritos no período<br/>
+        <b>Focos de Calor (GPS Real)</b><br/>
+        <i style="background:#DB1E2A; width:9px; height:9px; display:inline-block; border-radius:50%; border:1px solid #801119; margin-right:4px;"></i> Ativos (&lt; 48h)<br/>
+        <i style="background:#FAFF39; width:8px; height:8px; display:inline-block; border-radius:50%; border:1px solid #B35C15; margin-right:4px;"></i> Pretéritos no período<br/>
     </div>
     """
     m.get_root().html.add_child(folium.Element(legenda_html))
@@ -582,10 +601,26 @@ def gerar_boletim_pdf(
     elements = []
     usable_w = page_width - 2 * margin
     
-    # 1. Cabeçalho com 3 Logotipos e Título Oficial
-    img_brasao = RLImage(str(FILE_BRASAO_PARA), width=28*mm, height=12*mm) if FILE_BRASAO_PARA.exists() else ""
-    img_ideflor = RLImage(str(FILE_LOGO_IDEFLOR), width=32*mm, height=12*mm) if FILE_LOGO_IDEFLOR.exists() else ""
-    img_ngeo = RLImage(str(FILE_LOGO_NGEO), width=24*mm, height=12*mm) if FILE_LOGO_NGEO.exists() else ""
+    # 1. Cabeçalho com 3 Logotipos Proporcionais e Título Oficial
+    def _proportional_image(path: Path, max_w_mm: float, max_h_mm: float):
+        if not path.exists():
+            return ""
+        try:
+            from PIL import Image
+            with Image.open(path) as im:
+                w, h = im.size
+            ratio = w / h
+            calc_w = max_h_mm * ratio
+            if calc_w <= max_w_mm:
+                return RLImage(str(path), width=calc_w * mm, height=max_h_mm * mm)
+            else:
+                return RLImage(str(path), width=max_w_mm * mm, height=(max_w_mm / ratio) * mm)
+        except Exception:
+            return ""
+
+    img_brasao = _proportional_image(FILE_BRASAO_PARA, 18, 14)
+    img_ideflor = _proportional_image(FILE_LOGO_IDEFLOR, 22, 14)
+    img_ngeo = _proportional_image(FILE_LOGO_NGEO, 16, 14)
     
     title_p = Paragraph(
         "<para align='center'>"
@@ -598,13 +633,13 @@ def gerar_boletim_pdf(
     
     header_table = Table(
         [[img_brasao, title_p, img_ideflor, img_ngeo]],
-        colWidths=[30*mm, usable_w - 92*mm, 34*mm, 28*mm]
+        colWidths=[20*mm, usable_w - 62*mm, 24*mm, 18*mm]
     )
     header_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('ALIGN', (0,0), (0,0), 'LEFT'),
         ('ALIGN', (1,0), (1,0), 'CENTER'),
-        ('ALIGN', (2,0), (-1,-1), 'RIGHT'),
+        ('ALIGN', (2,0), (-1,-1), 'CENTER'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 1),
         ('TOPPADDING', (0,0), (-1,-1), 0),
     ]))
@@ -653,7 +688,7 @@ def gerar_boletim_pdf(
         Paragraph("<b>Municípios Atingidos / Contexto</b>", style_th),
     ]
     
-    col_w = [8*mm, 18*mm, 78*mm, 35*mm, 18*mm, 20*mm, 16*mm, 20*mm, usable_w - 213*mm]
+    col_w = [8*mm, 18*mm, 76*mm, 26*mm, 18*mm, 20*mm, 16*mm, 20*mm, usable_w - 202*mm]
     table_data = [headers]
     row_bg_styles = []
     
