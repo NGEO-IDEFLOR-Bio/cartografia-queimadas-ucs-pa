@@ -558,8 +558,23 @@ def gerar_mapa_interativo_folium(
     """
     m.get_root().html.add_child(folium.Element(legenda_html))
 
+    # Ajuste de layout para Google Colab: descer os controles do canto superior direito
+    # para evitar sobreposição pela barra flutuante nativa de saída de célula do Colab
+    css_colab_fix = """
+    <style>
+    .leaflet-top.leaflet-right {
+        top: 60px !important;
+    }
+    .leaflet-control-layers {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
+        border-radius: 6px !important;
+    }
+    </style>
+    """
+    m.get_root().html.add_child(folium.Element(css_colab_fix))
+
     Fullscreen(position="topleft").add_to(m)
-    folium.LayerControl(collapsed=False).add_to(m)
+    folium.LayerControl(position="topright", collapsed=False).add_to(m)
 
     if output_html:
         out_html_path = Path(output_html)
