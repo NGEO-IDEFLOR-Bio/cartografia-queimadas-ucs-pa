@@ -327,7 +327,7 @@ def gerar_mapa_interativo_folium(
     # Assegurar WGS84 para renderização web
     ucs_wgs = gdf_ucs_ranking.to_crs(CRS_WGS84) if gdf_ucs_ranking.crs != CRS_WGS84 else gdf_ucs_ranking
     
-    # 1. Mapa Base usando CartoDB Positron nativo via template URL direto (sem exigir chave de API)
+    # 1. Mapa Base usando camadas robustas sem exigência de chaves de API (padrão Esri Canvas / Visualizador NGEO)
     m = folium.Map(
         location=[-3.7, -52.4],
         zoom_start=6,
@@ -336,20 +336,44 @@ def gerar_mapa_interativo_folium(
         control_scale=True
     )
     
-    # Camada Positron (Padrão e limpa)
+    # Camada Neutra Clara (Esri World Light Gray Base - Idêntica à usada no Visualizador NGEO)
     folium.TileLayer(
-        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        attr="&copy; OpenStreetMap contributors &copy; CARTO",
-        subdomains="abcd",
-        max_zoom=20,
-        name="CartoDB Positron (Claro)"
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+        name="Esri Gray Canvas (Padrão Claro)",
+        max_zoom=16,
+        overlay=False,
+        control=True
     ).add_to(m)
     
     # Camada de Satélite Orbital (Esri World Imagery)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri World Imagery",
-        name="Satélite (Esri World Imagery)"
+        attr="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+        name="Satélite (Esri World Imagery)",
+        max_zoom=19,
+        overlay=False,
+        control=True
+    ).add_to(m)
+
+    # Camada Google Híbrido (Satélite com toponímia e estradas)
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+        attr="&copy; Google",
+        name="Google Híbrido (Satélite + Vias)",
+        max_zoom=20,
+        overlay=False,
+        control=True
+    ).add_to(m)
+
+    # Camada Google Relevo / Terreno
+    folium.TileLayer(
+        tiles="https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
+        attr="&copy; Google",
+        name="Google Relevo / Topografia",
+        max_zoom=18,
+        overlay=False,
+        control=True
     ).add_to(m)
 
     # 2. Contorno Oficial do Estado do Pará
