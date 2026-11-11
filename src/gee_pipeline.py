@@ -22,6 +22,10 @@ from src.config import (
 )
 
 
+# Bandas ópticas essenciais do Sentinel-2 para as pranchas e índices (economiza >75% de memória/tempo no GEE)
+OPTICAL_BANDS = ["B2", "B3", "B4", "B8", "B12"]
+
+
 def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
     """
     Inicializa o Google Earth Engine de forma resiliente no ambiente local ou Google Colab.
@@ -39,41 +43,47 @@ def init_gee(project_id: Optional[str] = DEFAULT_GEE_PROJECT) -> bool:
         return True
     except Exception as e:
         print(f"! Falha na inicialização direta do GEE ({e}).")
-        print("Tentando autenticação interativa no ambiente...")
         try:
-            ee.Authenticate()
-            ee.Initialize(project=target_project)
-            print(f"[OK] GEE autenticado e inicializado com sucesso no projeto: {target_project}")
-            return True
+            import IPython
+            if IPython.get_ipython() is not None:
+                print("Tentando autenticação interativa no ambiente...")
+                ee.Authenticate()
+                ee.Initialize(project=target_project)
+                print(f"[OK] GEE autenticado e inicializado com sucesso no projeto: {target_project}")
+                return True
         except Exception as auth_err:
-            print(f"[!] Erro definitivo ao autenticar GEE: {auth_err}")
-            return False
+            print(f"[!] Erro ao autenticar GEE: {auth_err}")
+        return False
 
 
 def clean_mask(img: ee.Image) -> ee.Image:
     """
-    Aplica máscara espectral de nuvens, sombras e brilho excessivo na coleção Sentinel-2:
+    Aplica máscara espectral de nuvens, sombras e brilho excessivo na coleção Sentinel-2
+    estritamente sobre as bandas ópticas essenciais (B2, B3, B4, B8, B12), reduzindo a carga
+    de processamento do GEE em mais de 75%:
     - SCL (Scene Classification): Mantém classes 4 (Vegetação), 5 (Solo) e 6 (Água)
     - QA60: Elimina nuvens opacas (bit 10) e cirrus (bit 11)
     - Banda B2: Filtra pixels com refletância >= 2000 (brilho saturado de nuvem residual)
-    - Divide por 10.000 para escala de refletância de superfície (0 a 1)
+    - Divide apenas as bandas ópticas por 10.000 (escala 0 a 1)
     """
     scl = img.select("SCL")
     qa = img.select("QA60")
     
-    # 4 = vegetation, 5 = bare soils / unclassified, 6 = water
+    # 4 = vegetação, 5 = solo exposto, 6 = água
     mask_scl = scl.eq(4).Or(scl.eq(5)).Or(scl.eq(6))
     
-    # QA60 bits 10 and 11
+    # QA60 bits 10 (opaca) e 11 (cirrus)
     mask_qa = qa.bitwiseAnd(1 << 10).eq(0).And(qa.bitwiseAnd(1 << 11).eq(0))
     
-    # B2 brightness filter (< 2000)
+    # Filtro de brilho saturado residual em B2 (< 2000)
     mask_bright = img.select("B2").lt(2000)
     
-    return (img.updateMask(mask_scl)
-               .updateMask(mask_qa)
-               .updateMask(mask_bright)
+    # Combinação booleana consolidada em uma única operação de máscara
+    combined_mask = mask_scl.And(mask_qa).And(mask_bright)
+    
+    return (img.select(OPTICAL_BANDS)
                .divide(10000.0)
+               .updateMask(combined_mask)
                .copyProperties(img, ["system:time_start"]))
 
 
@@ -148,16 +158,18 @@ def build_sentinel2_mosaics(
     region = ee.Geometry.Rectangle([xmin, ymin, xmax, ymax], proj="EPSG:4326", geodesic=False)
     
     # 1. Mosaico Pós-Fogo (Período Analisado)
+    # Pré-filtra cenas com nuvens < 80% para evitar o carregamento inútil de cenas opacas
     s2_col = (ee.ImageCollection(GEE_S2_COLLECTION)
                 .filterBounds(region)
                 .filterDate(data_inicio, data_fim)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 80))
                 .map(clean_mask))
     
     mosaico = s2_col.median().clip(region)
     
-    # Detecção refinada de corpos d'água (NDWI > 0 ou SCL == 6) para evitar coloração espúria de queimada na água
+    # Detecção refinada de corpos d'água (NDWI > 0) para evitar coloração espúria de queimada em rios e lagos
     ndwi = mosaico.normalizedDifference(["B3", "B8"]).rename("NDWI")
-    is_water = ndwi.gt(0.0).Or(mosaico.select("SCL").round().eq(6))
+    is_water = ndwi.gt(0.0)
     
     metodo_clean = str(metodo_severidade).strip().upper()
     
@@ -180,6 +192,7 @@ def build_sentinel2_mosaics(
         s2_pre = (ee.ImageCollection(GEE_S2_COLLECTION)
                     .filterBounds(region)
                     .filterDate(date_pre_start_str, date_pre_end_str)
+                    .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 80))
                     .map(clean_mask))
         mosaico_pre = s2_pre.median().clip(region)
         
@@ -232,16 +245,35 @@ def build_sentinel2_mosaics(
     }
 
 
+def get_adaptive_dimensions(extent_bbox: Tuple[float, float, float, float]) -> Tuple[int, int]:
+    """
+    Calcula dimensões adaptativas para renderização de basemaps no GEE,
+    evitando estouro de tempo/memória em UCs gigantescas (como Paru, Marajó e Grão-Pará).
+    """
+    xmin, ymin, xmax, ymax = extent_bbox
+    span_deg = max(xmax - xmin, ymax - ymin)
+    if span_deg > 2.0:
+        # Mega-UCs (> 100.000 km² / > 1.000.000 ha): 1024x819
+        return (1024, 819)
+    elif span_deg > 1.0:
+        # UCs grandes: 1152x922
+        return (1152, 922)
+    else:
+        # UCs médias e compactas: 1280x1024
+        return (1280, 1024)
+
+
 def fetch_rendered_basemap(
     image: ee.Image,
     extent_bbox: Tuple[float, float, float, float],
     vis_params: Dict[str, Any],
-    dimensions: Tuple[int, int] = (1280, 1024),
-    water_mask: Optional[ee.Image] = None
+    dimensions: Optional[Tuple[int, int]] = None,
+    water_mask: Optional[ee.Image] = None,
+    timeout_seconds: int = 120
 ) -> np.ndarray:
     """
-    Renderiza e baixa o basemap como array RGB NumPy pronto para plotagem no Matplotlib.
-    Se fornecida máscara de água, preserva rios e lagos com tonalidade azul hídrica.
+    Renderiza e baixa o basemap como array RGB NumPy com retry resiliente
+    e escalonamento dinâmico de resolução em caso de sobrecarga do servidor GEE.
     """
     xmin, ymin, xmax, ymax = extent_bbox
     region = ee.Geometry.Rectangle([xmin, ymin, xmax, ymax], proj="EPSG:4326", geodesic=False)
@@ -257,14 +289,35 @@ def fetch_rendered_basemap(
         water_rgb = ee.Image.constant([31, 97, 141]).toByte()
         vis_img = vis_img.where(water_mask.eq(1), water_rgb)
     
-    url = vis_img.getThumbURL({
-        "region": region,
-        "dimensions": f"{dimensions[0]}x{dimensions[1]}",
-        "format": "png"
-    })
+    target_dim = dimensions or get_adaptive_dimensions(extent_bbox)
     
-    response = requests.get(url, timeout=45)
-    response.raise_for_status()
+    # Estratégia de tentativas com redução gradual de resolução se houver lentidão no GEE
+    tentativas = [
+        (target_dim, timeout_seconds),
+        ((max(target_dim[0] * 3 // 4, 768), max(target_dim[1] * 3 // 4, 614)), max(timeout_seconds - 30, 90)),
+        ((768, 614), 75)
+    ]
     
-    pil_img = Image.open(io.BytesIO(response.content)).convert("RGB")
-    return np.array(pil_img)
+    ultimo_erro = None
+    for i, (dim, t_out) in enumerate(tentativas, start=1):
+        try:
+            url = vis_img.getThumbURL({
+                "region": region,
+                "dimensions": f"{dim[0]}x{dim[1]}",
+                "format": "png"
+            })
+            
+            response = requests.get(url, timeout=t_out)
+            response.raise_for_status()
+            
+            pil_img = Image.open(io.BytesIO(response.content)).convert("RGB")
+            return np.array(pil_img)
+            
+        except Exception as e:
+            ultimo_erro = e
+            if i < len(tentativas):
+                prox_dim = tentativas[i][0]
+                print(f"  ! Aviso: Tentativa {i} ao obter basemap do GEE falhou ({e}). Tentando novamente com resolução otimizada ({prox_dim[0]}x{prox_dim[1]})...")
+            else:
+                print(f"  ! Falha definitiva após {len(tentativas)} tentativas ao baixar basemap do GEE: {e}")
+                raise ultimo_erro
