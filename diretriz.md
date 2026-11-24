@@ -80,9 +80,9 @@ Os basemaps orbitais são derivados da coleção `COPERNICUS/S2_SR_HARMONIZED` a
        - Não Queimado / Estável: $-0.10$ a $0.10$ (`#A6D96A`)
        - Rebrota Vegetal: $< -0.10$ (`#1A9641`)
        - Corpos d'Água: Máscara NDWI (`#1F618D`)
-     - **Opção B: Mascaramento Fenológico via MapBiomas Brasil Coleção 11:**
+     - **Opção B: Classificação de Cicatriz por Cobertura da Terra via MapBiomas Brasil Coleção 11:**
        Asset: `projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3`
-       Utiliza as classes de Campo Alagável (11 - Marajó), Formação Campestre (12), Pastagem (15) e Mosaico (21) para normalizar a senescência natural da palha seca, exigindo queima profunda ($< -0.22$) para disparar alerta de fogo em áreas abertas.
+       Combina o dNBR bi-temporal com a cobertura da terra em classes categóricas. O limiar mínimo de queima varia por cobertura (Floresta 0,10; Pastagem/Mosaico 0,15; Campo/Savana 0,18; demais 0,12), e as classes de queima (severa, alta, moderada e leve) usam tons quentes; cobertura não queimada (floresta, campo/savana, pastagem/mosaico, outros usos) usa tons frios/mudos. A água permanece em azul institucional (máscara NDWI). Isso elimina a confusão entre senescência sazonal de pastagem/campo e cicatriz de fogo.
      - **Opção C: NBR Clássico Unitemporal Calibrado.**
 
 ---
@@ -92,15 +92,16 @@ Os basemaps orbitais são derivados da coleção `COPERNICUS/S2_SR_HARMONIZED` a
 O layout obedece à especificação milimétrica oficial do NGEO/IDEFLOR-Bio:
 
 1. **Mapa Principal de Detalhe ($155 \times 124\text{ mm}$ - Esquerda):**
-   - Enquadramento da UC com $100\%$ de cobertura do mosaico Sentinel-2.
-   - Camada de focos com a simbologia bicolor de triângulos.
+   - Enquadramento com zoom na **ocorrência** (bounding box dos focos, margem de contexto e janela mínima); fallback para o limite integral da UC quando não há focos.
+   - Camada de focos com simbologia bicolor de triângulos e tamanho/opacidade adaptativos ao volume (evita cobrir o raster de severidade).
    - Grade uniforme com supressão de rótulos em quinas ($< 3{,}5\%$ da borda).
    - Eixo Y com coordenadas no sentido vertical ascendente ($90^\circ$).
    - Spines/molduras com `zorder=100` para garantir sobreposição nítida sobre o raster.
 
 2. **Mapa Intermediário ($102 \times 75\text{ mm}$ - Superior Direito):**
    - Limite integral da UC em verde florestal com contexto municipal e hidrográfico.
-   - Localização das queimadas na escala da unidade.
+   - Localização das queimadas na escala da unidade: mapa de calor (KDE) acima de 250 focos, com foco recente (< 48h) ponderado acima dos pretéritos; símbolos individuais abaixo desse limiar.
+   - Retângulo da área de detalhe do mapa principal, desenhado apenas quando o zoom é parcial.
    - Grade uniforme simétrica ($0{,}10^\circ$).
 
 3. **Mapa Macro ($102 \times 75\text{ mm}$ - Inferior Direito):**

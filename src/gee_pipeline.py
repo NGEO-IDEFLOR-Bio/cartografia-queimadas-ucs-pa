@@ -18,7 +18,10 @@ from PIL import Image
 import ee
 from src.config import (
     GEE_S2_COLLECTION, DEFAULT_GEE_PROJECT, VIS_CONFIGS,
-    MAPBIOMAS_C11_ASSET, MAPBIOMAS_YEAR_DEFAULT
+    MAPBIOMAS_C11_ASSET, MAPBIOMAS_YEAR_DEFAULT,
+    SEVERIDADE_CLASSES,
+    LIMIAR_DNBR_FLORESTA, LIMIAR_DNBR_CAMPO,
+    LIMIAR_DNBR_PASTAGEM, LIMIAR_DNBR_OUTROS
 )
 
 
@@ -128,6 +131,68 @@ def calculate_visible_extent(
     return (xmin, ymin, xmax, ymax)
 
 
+def classify_severity_by_landcover(dnbr: ee.Image, region: ee.Geometry) -> ee.Image:
+    """
+    Combina a cicatriz de queima (dNBR bi-temporal) com a cobertura da terra do
+    MapBiomas Coleção 11, produzindo uma imagem categórica 1..8.
+
+    A lógica separa explicitamente manejo/uso (pastagem, mosaico) e vegetação
+    natural sazonal (campo, savana) de cicatriz de queima real:
+
+    - 1..4: cicatriz de queima (severa, alta, moderada, leve). O limiar mínimo
+      de dNBR varia por cobertura: floresta 0,10; pastagem 0,15; campo/savana
+      0,18. Assim, a seca sazonal do Marajó não é pintada como fogo.
+    - 5..8: cobertura NÃO queimada (floresta, campo/savana, pastagem/mosaico,
+      outros usos), em tons frios/mudos.
+    """
+    asset_img = ee.Image(MAPBIOMAS_C11_ASSET)
+    banda_solicitada = f"classification_{MAPBIOMAS_YEAR_DEFAULT}"
+    banda_alvo = banda_solicitada
+
+    # Verificação explícita: o GEE é lazy e um select() de banda inexistente só
+    # falharia ao renderizar. Assim o fallback do pipeline realmente funciona.
+    bandas = asset_img.bandNames().getInfo()
+    if banda_alvo not in bandas:
+        candidatas = sorted(b for b in bandas if b.startswith("classification_"))
+        if not candidatas:
+            raise ValueError(f"Asset MapBiomas sem bandas 'classification_*': {bandas}")
+        banda_alvo = candidatas[-1]
+        print(f"  ! Aviso: banda {banda_solicitada} indisponível; usando a mais recente ({banda_alvo}).")
+
+    mb = asset_img.select(banda_alvo).clip(region)
+
+    # 3 Formação Florestal, 5 Mangue, 6 Floresta Alagável, 7 Restinga Arborizada
+    is_floresta = mb.eq(3).Or(mb.eq(5)).Or(mb.eq(6)).Or(mb.eq(7))
+    # 4 Formação Savânica, 11 Campo Alagável, 12 Formação Campestre, 13 Outra Formação Não Florestal
+    is_campo = mb.eq(4).Or(mb.eq(11)).Or(mb.eq(12)).Or(mb.eq(13))
+    # 14 Agropecuária, 15 Pastagem, 18/19/20 Lavouras, 21 Mosaico de Usos
+    is_pastagem = (
+        mb.eq(14).Or(mb.eq(15)).Or(mb.eq(18))
+        .Or(mb.eq(19)).Or(mb.eq(20)).Or(mb.eq(21))
+    )
+
+    # Classe base = outros usos / solo exposto (8)
+    classes = ee.Image.constant(8).rename("SEVERIDADE_CLASSES")
+    classes = classes.where(is_pastagem, 7)
+    classes = classes.where(is_campo, 6)
+    classes = classes.where(is_floresta, 5)
+
+    # Limiar local de dNBR para considerar cicatriz de queima
+    limiar = ee.Image.constant(LIMIAR_DNBR_OUTROS)
+    limiar = limiar.where(is_pastagem, LIMIAR_DNBR_PASTAGEM)
+    limiar = limiar.where(is_campo, LIMIAR_DNBR_CAMPO)
+    limiar = limiar.where(is_floresta, LIMIAR_DNBR_FLORESTA)
+
+    # Sobrepõe as classes de queima (ordem crescente de severidade)
+    classes = classes.where(dnbr.gte(limiar), 4)
+    classes = classes.where(dnbr.gte(0.27), 3)
+    classes = classes.where(dnbr.gte(0.44), 2)
+    classes = classes.where(dnbr.gte(0.66), 1)
+
+    # Preserva o footprint válido do mosaico (sem pintar no-data como "outros usos")
+    return classes.updateMask(dnbr.mask())
+
+
 def build_sentinel2_mosaics(
     extent_bbox: Tuple[float, float, float, float],
     data_inicio: str,
@@ -137,11 +202,14 @@ def build_sentinel2_mosaics(
 ) -> Dict[str, Any]:
     """
     Cria os mosaicos Sentinel-2 medianos e a camada de severidade de queimada
-    cobringo a extensão visível total com suporte a duas abordagens robustas:
-    1. 'DNBR' (Padrão): Análise Bi-temporal (dNBR = NBR_pré - NBR_pós), imune a falsos positivos em campos/savana.
-    2. 'MAPBIOMAS': Mascaramento fenológico baseado na Coleção 11 do MapBiomas (classes 11, 12, 15, 21).
+    cobrindo a extensão visível total com suporte a três abordagens:
+
+    1. 'DNBR' (padrão): análise bi-temporal contínua (dNBR = NBR_pré - NBR_pós).
+    2. 'MAPBIOMAS': classificação categórica de cicatriz de queima (dNBR) por
+       cobertura da terra (MapBiomas C11), separando campos/savana/pastagem de
+       queimada real.
     3. 'NBR': NBR unitemporal calibrado clássico.
-    
+
     Returns
     -------
     dict com:
@@ -149,6 +217,8 @@ def build_sentinel2_mosaics(
         'nbr': ee.Image da camada de severidade calculada
         'severidade_layer': ee.Image da camada de severidade
         'tipo_severidade': chave da camada ('dnbr', 'nbr_mapbiomas' ou 'nbr')
+        'legenda_severidade': lista [(cor, rótulo)] quando a camada é categórica
+        'legenda_titulo': título da legenda categórica
         'water_mask': máscara refinada de água (NDWI/SCL)
         'extent': Tuple[float, float, float, float]
         'geometry': ee.Geometry.Rectangle
@@ -172,72 +242,76 @@ def build_sentinel2_mosaics(
     is_water = ndwi.gt(0.0)
     
     metodo_clean = str(metodo_severidade).strip().upper()
-    
-    if any(k in metodo_clean for k in ["DNBR", "BITEMPORAL", "BI-TEMPORAL"]):
+
+    usa_dnbr = any(k in metodo_clean for k in ["DNBR", "BITEMPORAL", "BI-TEMPORAL", "MAPBIOMAS", "C11"])
+
+    dnbr = None
+    if usa_dnbr:
         # -------------------------------------------------------------
-        # ABORDAGEM 1: dNBR Bi-temporal (Pré-Fogo vs Pós-Fogo)
+        # Mosaico Pré-Fogo (base do dNBR bi-temporal)
         # -------------------------------------------------------------
         dt_start = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         dt_end = datetime.strptime(data_fim, "%Y-%m-%d").date()
         intervalo_dias = max((dt_end - dt_start).days, dias_pre_fogo)
-        
+
         dt_pre_end = dt_start
         dt_pre_start = dt_start - timedelta(days=intervalo_dias)
-        
+
         date_pre_end_str = dt_pre_end.strftime("%Y-%m-%d")
         date_pre_start_str = dt_pre_start.strftime("%Y-%m-%d")
-        
+
         print(f"  • [GEE] Calculando dNBR Bi-temporal: Pré ({date_pre_start_str} a {date_pre_end_str}) vs Pós ({data_inicio} a {data_fim})...")
-        
+
         s2_pre = (ee.ImageCollection(GEE_S2_COLLECTION)
                     .filterBounds(region)
                     .filterDate(date_pre_start_str, date_pre_end_str)
                     .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 80))
                     .map(clean_mask))
         mosaico_pre = s2_pre.median().clip(region)
-        
+
         nbr_pre = mosaico_pre.normalizedDifference(["B8", "B12"]).rename("NBR_PRE")
         nbr_pos = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR_POS")
-        
-        layer_severidade = nbr_pre.subtract(nbr_pos).rename("dNBR")
+
+        dnbr = nbr_pre.subtract(nbr_pos).rename("dNBR")
+
+    if any(k in metodo_clean for k in ["DNBR", "BITEMPORAL", "BI-TEMPORAL"]):
+        # -------------------------------------------------------------
+        # ABORDAGEM 1: dNBR Bi-temporal contínuo (Pré-Fogo vs Pós-Fogo)
+        # -------------------------------------------------------------
+        layer_severidade = dnbr
         tipo_severidade = "dnbr"
-        
+
     elif any(k in metodo_clean for k in ["MAPBIOMAS", "C11"]):
         # -------------------------------------------------------------
-        # ABORDAGEM 2: NBR com Mascaramento Fenológico MapBiomas Coleção 11
+        # ABORDAGEM 2: Classificação de Cicatriz por Cobertura da Terra
+        # (dNBR + MapBiomas C11), com classes categóricas e legenda própria
         # -------------------------------------------------------------
-        print(f"  • [GEE] Aplicando mascaramento fenológico com MapBiomas Coleção 11 ({MAPBIOMAS_YEAR_DEFAULT})...")
-        nbr_raw = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
-        
+        print(f"  • [GEE] Classificando cicatriz de queima por cobertura da terra (MapBiomas C11 {MAPBIOMAS_YEAR_DEFAULT})...")
+
         try:
-            mb_img = ee.Image(MAPBIOMAS_C11_ASSET).select(f"classification_{MAPBIOMAS_YEAR_DEFAULT}").clip(region)
-            # Classes não florestais do MapBiomas que sofrem senescência estacional no Pará:
-            # 11 = Campo Alagável e Área Pantanosa (Marajó)
-            # 12 = Formação Campestre (Savanas/Cerrado)
-            # 15 = Pastagem
-            # 21 = Mosaico de Usos
-            is_campo = mb_img.eq(11).Or(mb_img.eq(12)).Or(mb_img.eq(15)).Or(mb_img.eq(21))
-            
-            # Mascaramento inteligente: em campo natural/savana, se o NBR estiver na faixa
-            # de senescência natural (>= -0.22), normaliza para patamar neutro (0.05).
-            # Apenas se NBR < -0.22 (cinza e carvão profundo de queima real) aparece como fogo!
-            layer_severidade = nbr_raw.where(is_campo.And(nbr_raw.gte(-0.22)), ee.Image.constant(0.05)).rename("NBR_MAPBIOMAS")
+            layer_severidade = classify_severity_by_landcover(dnbr, region)
         except Exception as e:
-            print(f"  ! Aviso: Falha ao carregar MapBiomas C11 ({e}). Usando NBR calibrado.")
-            layer_severidade = nbr_raw
-            
+            print(f"  ! Aviso: Falha ao carregar MapBiomas C11 ({e}). Aplicando classificação por limiar global de dNBR.")
+            layer_severidade = ee.Image.constant(8).rename("SEVERIDADE_CLASSES")
+            layer_severidade = layer_severidade.where(dnbr.gte(LIMIAR_DNBR_OUTROS), 4)
+            layer_severidade = layer_severidade.where(dnbr.gte(0.27), 3)
+            layer_severidade = layer_severidade.where(dnbr.gte(0.44), 2)
+            layer_severidade = layer_severidade.where(dnbr.gte(0.66), 1)
+
         tipo_severidade = "nbr_mapbiomas"
-        
+
     else:
-        # NBR Clássico Unitemporal
+        # NBR Clássico Unitemporal (sem análise pré-fogo)
         layer_severidade = mosaico.normalizedDifference(["B8", "B12"]).rename("NBR")
         tipo_severidade = "nbr"
-    
+
     return {
         "mosaico": mosaico,
         "nbr": layer_severidade,
         "severidade_layer": layer_severidade,
         "tipo_severidade": tipo_severidade,
+        "legenda_severidade": SEVERIDADE_CLASSES if tipo_severidade == "nbr_mapbiomas" else None,
+        "legenda_titulo": "Severidade e Cobertura (MapBiomas C11)" if tipo_severidade == "nbr_mapbiomas" else None,
         "water_mask": is_water,
         "extent": (xmin, ymin, xmax, ymax),
         "geometry": region,

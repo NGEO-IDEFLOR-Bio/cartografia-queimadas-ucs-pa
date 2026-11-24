@@ -59,6 +59,50 @@ DEFAULT_GEE_PROJECT = "ee-samuelsantosambientalcourse"
 MAPBIOMAS_C11_ASSET = "projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3"
 MAPBIOMAS_YEAR_DEFAULT = 2024
 
+# Classificação Integrada de Severidade + Cobertura da Terra (MapBiomas C11)
+# A legenda separa explicitamente o que é CICATRIZ DE QUEIMA (tons quentes/saturados)
+# do que é COBERTURA NATURAL NÃO QUEIMADA (tons frios/mudos: verde, oliva e cinza).
+# Classes 1..8 (a água é aplicada separadamente pela máscara NDWI em azul institucional).
+SEVERIDADE_CLASSES = [
+    ("#67000D", "Queimada Severa (dNBR > 0,66)"),
+    ("#A50F15", "Queimada Alta (0,44 a 0,66)"),
+    ("#EF6548", "Queimada Moderada (0,27 a 0,44)"),
+    ("#FDBB84", "Queimada Leve (limiar local a 0,27)"),
+    ("#1B5E20", "Floresta não queimada"),
+    ("#9E9D24", "Campo / Savana não queimado"),
+    ("#7CB342", "Pastagem / Mosaico não queimado"),
+    ("#BDBDBD", "Outros usos / Solo exposto"),
+]
+SEVERIDADE_PALETTE = [cor for cor, _ in SEVERIDADE_CLASSES]
+
+# Limiares mínimos de dNBR para disparar cicatriz de queima, por cobertura da terra.
+# Campos e savanas exigem perda de biomassa maior para não confundir senescência sazonal.
+LIMIAR_DNBR_FLORESTA = 0.10
+LIMIAR_DNBR_CAMPO = 0.18
+LIMIAR_DNBR_PASTAGEM = 0.15
+LIMIAR_DNBR_OUTROS = 0.12
+
+# Mapa intermediário: acima deste número de focos a plotagem individual é
+# substituída por um mapa de calor (KDE), evitando a saturação visual dos símbolos.
+HEATMAP_MIN_FOCOS = 250
+HEATMAP_CMAP = ["#FFF7BC", "#FEC44F", "#F03B20", "#BD0026", "#67000D"]
+HEATMAP_PESO_PRETERITO = 0.45  # Focos antigos pesam menos que os recentes (< 48h)
+
+# Enquadramento do mapa principal: zoom na OCORRÊNCIA (e não no limite integral da UC)
+OCORRENCIA_MARGIN_PCT = 0.15        # Margem de contexto ao redor das ocorrências
+OCORRENCIA_MIN_SPAN_DEG = 0.06      # Janela mínima (~6,6 km) para focos muito agrupados
+OCORRENCIA_FALLBACK_UC_MARGIN = 0.06  # Margem usada quando não há focos no período
+
+# Escalonamento dinâmico dos triângulos quando há grande volume de focos
+FOCOS_ESCALA = [
+    # (limite_total, tam_ant, tam_rec, lw_ant, lw_rec, alpha_ant, alpha_rec)
+    (400, FOCOS_ANTERIORES_SIZE, FOCOS_RECENTES_SIZE, FOCOS_ANTERIORES_LW, FOCOS_RECENTES_LW, 1.0, 1.0),
+    (1500, 46, 62, 0.8, 1.0, 0.95, 1.0),
+    (5000, 28, 40, 0.6, 0.8, 0.82, 0.95),
+    (10000, 16, 26, 0.45, 0.6, 0.62, 0.88),
+    (float("inf"), 12, 20, 0.4, 0.55, 0.55, 0.82),
+]
+
 # Visualizações Orbitais
 VIS_CONFIGS = {
     "falsa_cor": {
@@ -93,34 +137,29 @@ VIS_CONFIGS = {
     },
     "nbr_mapbiomas": {
         "nome": "Severidade do Fogo (MapBiomas C11)",
-        "subtitulo": "NBR com Mascaramento Fenológico de Campos Naturais do Marajó",
-        "min": -0.30,
-        "max": 0.70,
-        "palette": [
-            "#7F0000",  # -0.30: Queimada Severa (carvão / cinzas profundas)
-            "#D9534F",  # -0.15: Queimada Moderada em dossel
-            "#E67E22",  # -0.08: Queima leve em sub-bosque
-            "#FAD7A0",  #  0.05: Campos Naturais / Savanas / Cerrado seco (MapBiomas 11/12/15)
-            "#D4EFDF",  #  0.25: Vegetação herbácea úmida
-            "#27AE60",  #  0.45: Floresta conservada
-            "#0E6251",  #  0.70: Floresta tropical densa
-        ],
+        "subtitulo": "Cicatriz de Queima (dNBR) + Cobertura da Terra (MapBiomas C11)",
+        "min": 1,
+        "max": len(SEVERIDADE_CLASSES),
+        "categorical": True,
+        "classes": SEVERIDADE_CLASSES,
+        "palette": SEVERIDADE_PALETTE,
     },
     "nbr": {
         "nome": "NBR Clássico (Unitemporal)",
         "subtitulo": "Normalized Burn Ratio (B8 - B12) / (B8 + B12)",
         "min": -0.30,
         "max": 0.70,
+        # Tons frios/mudos para cobertura não queimada; tons quentes apenas para cicatriz.
         "palette": [
-            "#7F0000",  # -0.30: Queimada Severa (cinzas profundas / solo calcinado)
-            "#D9534F",  # -0.15: Queimada Moderada / Cicatriz recente
-            "#E67E22",  # -0.08: Transição / Queima em sub-bosque
-            "#FAD7A0",  #  0.02: Campos Naturais / Savanas / Cerrado seco sazonal
-            "#F9E79F",  #  0.15: Campos secos / Solo exposto
-            "#D4EFDF",  #  0.28: Vegetação herbácea úmida / Pastagem verde
-            "#82E0AA",  #  0.38: Vegetação arbustiva / Savana preservada
-            "#27AE60",  #  0.55: Floresta conservada
-            "#0E6251",  #  0.70: Floresta tropical densa
+            "#67000D",  # -0.30: Queimada Severa (cinzas profundas / solo calcinado)
+            "#A50F15",  # -0.15: Queimada Alta / Cicatriz recente
+            "#EF6548",  # -0.08: Queimada Moderada
+            "#FDBB84",  #  0.02: Queima leve
+            "#9E9D24",  #  0.15: Campos Naturais / Savanas / Cerrado seco sazonal (NÃO queimado)
+            "#7CB342",  #  0.28: Pastagem / Vegetação herbácea (NÃO queimada)
+            "#2E7D32",  #  0.45: Floresta conservada
+            "#1B5E20",  #  0.60: Floresta densa
+            "#0B3D0B",  #  0.70: Floresta tropical densa
         ],
     }
 }

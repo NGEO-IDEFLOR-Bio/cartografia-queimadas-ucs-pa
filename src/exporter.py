@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 
 import ee
 from src.config import (
-    OUTPUTS_DIR, FILE_UCS_ESTADUAIS, VIS_CONFIGS, CRS_GEOGRAFICO
+    OUTPUTS_DIR, FILE_UCS_ESTADUAIS, VIS_CONFIGS, CRS_GEOGRAFICO,
+    OCORRENCIA_MARGIN_PCT, OCORRENCIA_MIN_SPAN_DEG, OCORRENCIA_FALLBACK_UC_MARGIN
 )
 from src.gee_pipeline import (
     calculate_visible_extent,
@@ -119,6 +120,64 @@ def find_uc_by_name(nome_uc: str) -> gpd.GeoDataFrame:
     )
 
 
+def calculate_occurrence_extent(
+    gdf_focos: gpd.GeoDataFrame,
+    uc_bounds: Tuple[float, float, float, float],
+    aspect_ratio: float = 1.25,
+    margin_pct: float = OCORRENCIA_MARGIN_PCT,
+    min_span_deg: float = OCORRENCIA_MIN_SPAN_DEG
+) -> Tuple[float, float, float, float]:
+    """
+    Calcula o enquadramento do mapa principal com zoom na OCORRÊNCIA.
+
+    Usa a bounding box dos focos do período (e não o limite integral da UC),
+    com margem de contexto, janela mínima para focos muito agrupados e ajuste
+    exato ao aspect ratio do quadro cartográfico (155 x 124 mm -> 1.25).
+    Se não houver focos, preserva o enquadramento total da UC.
+    """
+    if gdf_focos is None or gdf_focos.empty:
+        return calculate_visible_extent(
+            uc_bounds[0], uc_bounds[1], uc_bounds[2], uc_bounds[3],
+            aspect_ratio=aspect_ratio,
+            margin_pct=OCORRENCIA_FALLBACK_UC_MARGIN
+        )
+
+    fxmin, fymin, fxmax, fymax = gdf_focos.total_bounds
+    cx = (fxmin + fxmax) / 2.0
+    cy = (fymin + fymax) / 2.0
+
+    # Janela mínima: evita zoom extremo quando todos os focos estão no mesmo pixel
+    span_x = max(fxmax - fxmin, min_span_deg)
+    span_y = max(fymax - fymin, min_span_deg)
+
+    xmin, xmax = cx - span_x / 2.0, cx + span_x / 2.0
+    ymin, ymax = cy - span_y / 2.0, cy + span_y / 2.0
+
+    # Margem de contexto ao redor das ocorrências
+    w = xmax - xmin
+    h = ymax - ymin
+    xmin -= w * margin_pct
+    xmax += w * margin_pct
+    ymin -= h * margin_pct
+    ymax += h * margin_pct
+
+    # Ajuste fino ao aspect ratio do viewport, sem deformar a geografia
+    w_curr = xmax - xmin
+    h_curr = ymax - ymin
+    curr_ratio = w_curr / h_curr if h_curr else aspect_ratio
+
+    if curr_ratio < aspect_ratio:
+        delta = (h_curr * aspect_ratio - w_curr) / 2.0
+        xmin -= delta
+        xmax += delta
+    else:
+        delta = (w_curr / aspect_ratio - h_curr) / 2.0
+        ymin -= delta
+        ymax += delta
+
+    return (xmin, ymin, xmax, ymax)
+
+
 def processar_e_exportar_todos_os_mapas(
     nome_uc: str,
     data_inicio: Optional[str] = None,
@@ -139,8 +198,10 @@ def processar_e_exportar_todos_os_mapas(
     Parameters
     ----------
     metodo_severidade : str
-        'DNBR' (padrão): Análise Bi-temporal (dNBR = NBR_pré - NBR_pós).
-        'MAPBIOMAS': Mascaramento fenológico com a Coleção 11 do MapBiomas.
+        'DNBR': Análise bi-temporal contínua (dNBR = NBR_pré - NBR_pós).
+        'MAPBIOMAS' (recomendado): classificação categórica da cicatriz de queima
+        (dNBR) por cobertura da terra (MapBiomas C11), separando pastagem,
+        savana e campo natural não queimados de fogo real.
         'NBR': NBR unitemporal clássico.
     focos_source : Union[str, Path, ee.FeatureCollection]
         'BDQUEIMADAS' (padrão): Baixa automaticamente os focos oficiais do INPE/BDQueimadas.
@@ -167,16 +228,41 @@ def processar_e_exportar_todos_os_mapas(
     
     print(f"[OK] UC selecionada: {uc_real_name}")
     
-    # 2. Calcular Extensão Visível do Mapa Principal (Proporção 155 x 124 mm -> 1.25)
-    bounds = gdf_uc.total_bounds  # xmin, ymin, xmax, ymax
-    vis_extent = calculate_visible_extent(
-        bounds[0], bounds[1], bounds[2], bounds[3],
-        aspect_ratio=1.25,
-        margin_pct=0.06
+    # 2. Ingestão dos Focos de Queimada (necessária antes de definir o zoom)
+    print("[*] Ingerindo focos de queimada...")
+    is_bdqueimadas_auto = (
+        focos_source is None
+        or (isinstance(focos_source, str) and focos_source.upper() in ["BDQUEIMADAS", "INPE", "AUTO", "BD_QUEIMADAS"])
     )
-    print(f"[OK] Extensão do viewport calculada: {vis_extent}")
-    
-    # 3. Construir Mosaicos Sentinel-2 e Severidade (dNBR / MapBiomas / NBR) no GEE
+
+    if is_bdqueimadas_auto:
+        # Download 100% automático e inteligente do INPE BDQueimadas
+        gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
+    elif isinstance(focos_source, str) and focos_source.startswith("projects/"):
+        uc_geometry_ee = ee.Geometry(uc_poly.__geo_interface__)
+        gdf_focos = load_focos_from_gee(focos_source, filter_geometry=uc_geometry_ee)
+    elif isinstance(focos_source, (str, Path)) and Path(focos_source).exists():
+        gdf_focos = load_focos_from_file(focos_source)
+    else:
+        # Fallback resiliente
+        try:
+            uc_geometry_ee = ee.Geometry(uc_poly.__geo_interface__)
+            gdf_focos = load_focos_from_gee(str(focos_source), filter_geometry=uc_geometry_ee)
+        except Exception:
+            gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
+
+    # Filtro espacial no polígono da UC
+    gdf_focos_uc = filter_focos_by_polygon(gdf_focos, uc_poly, buffer_meters=buffer_uc_metros)
+
+    # 3. Zoom do Mapa Principal na OCORRÊNCIA (fallback: limite integral da UC)
+    bounds = gdf_uc.total_bounds  # xmin, ymin, xmax, ymax
+    vis_extent = calculate_occurrence_extent(gdf_focos_uc, bounds, aspect_ratio=1.25)
+    if gdf_focos_uc.empty:
+        print(f"[OK] Sem focos no período: enquadramento total da UC -> {vis_extent}")
+    else:
+        print(f"[OK] Zoom do mapa principal na ocorrência ({len(gdf_focos_uc)} focos) -> {vis_extent}")
+
+    # 4. Construir Mosaicos Sentinel-2 e Severidade (dNBR / MapBiomas / NBR) no GEE
     print(f"[*] Processando mosaicos orbitais e índice de severidade ({metodo_severidade.upper()})...")
     s2_data = build_sentinel2_mosaics(
         vis_extent, data_inicio, data_fim, metodo_severidade=metodo_severidade
@@ -184,35 +270,13 @@ def processar_e_exportar_todos_os_mapas(
     mosaico = s2_data["mosaico"]
     severidade_layer = s2_data["nbr"]
     tipo_sev_key = s2_data.get("tipo_severidade", "dnbr")
-    
-    # 4. Ingestão e Classificação dos Focos de Queimada
-    print("[*] Ingerindo e classificando focos de queimada...")
-    is_bdqueimadas_auto = (
-        focos_source is None
-        or (isinstance(focos_source, str) and focos_source.upper() in ["BDQUEIMADAS", "INPE", "AUTO", "BD_QUEIMADAS"])
-    )
-    
-    if is_bdqueimadas_auto:
-        # Download 100% automático e inteligente do INPE BDQueimadas
-        gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
-    elif isinstance(focos_source, str) and focos_source.startswith("projects/"):
-        gdf_focos = load_focos_from_gee(focos_source, filter_geometry=s2_data["geometry"])
-    elif isinstance(focos_source, (str, Path)) and Path(focos_source).exists():
-        gdf_focos = load_focos_from_file(focos_source)
-    else:
-        # Fallback resiliente
-        try:
-            gdf_focos = load_focos_from_gee(str(focos_source), filter_geometry=s2_data["geometry"])
-        except Exception:
-            gdf_focos = fetch_bdqueimadas_inpe(data_inicio=data_inicio, data_fim=data_fim)
-            
-    # Filtro espacial no polígono da UC
-    gdf_focos_uc = filter_focos_by_polygon(gdf_focos, uc_poly, buffer_meters=buffer_uc_metros)
+
+    # 5. Classificação Temporal dos Focos (recentes < 48h vs. pretéritos)
     dt_referencia = data_referencia_foco or data_fim
     gdf_anteriores, gdf_recentes, metricas = classify_focos_by_date(
         gdf_focos_uc, data_referencia=dt_referencia, limiar_dias_recente=2
     )
-    
+
     print(f"[OK] Total de focos na UC: {metricas['total']}")
     if metricas.get("tem_foco_recente"):
         print(f"  • [MAPA QUENTE] Focos ativos recentes (< 48h - {metricas['data_ultima_observacao']}): {metricas['recentes']}")
@@ -222,7 +286,7 @@ def processar_e_exportar_todos_os_mapas(
         print(f"  • [MAPA FRIO] Sem focos ativos nas últimas 48h{dias_info}.")
         print(f"  • Focos acumulados no período: {metricas['anteriores']} (Último registro em {metricas['data_ultima_observacao']})")
     
-    # 5. Gerar as 3 Variantes de Mapa (Falsa Cor, Cor Natural, Severidade dNBR/MapBiomas/NBR)
+    # 6. Gerar as 3 Variantes de Mapa (Falsa Cor, Cor Natural, Severidade dNBR/MapBiomas/NBR)
     safe_name = uc_real_name.replace(" ", "_").replace("/", "-")
     prefix = output_prefix or f"Mapa_Fogo_{safe_name}"
     periodo_label = f"{data_inicio} a {data_fim}"
@@ -264,6 +328,8 @@ def processar_e_exportar_todos_os_mapas(
             tipo_basemap=vis_spec["nome"],
             periodo_str=periodo_label,
             metricas=metricas,
+            legenda_severidade=s2_data.get("legenda_severidade"),
+            legenda_titulo=s2_data.get("legenda_titulo"),
             output_path=out_png
         )
         
@@ -277,7 +343,7 @@ def processar_e_exportar_todos_os_mapas(
             "titulo": vis_spec["nome"]
         }
         
-    # 6. Gerar Planilha Excel Estruturada (.xlsx) e Pacote Geoespacial Google Earth (.kml)
+    # 7. Gerar Planilha Excel Estruturada (.xlsx) e Pacote Geoespacial Google Earth (.kml)
     excel_path = None
     kml_path = None
     try:
@@ -308,7 +374,7 @@ def processar_e_exportar_todos_os_mapas(
     except Exception as e:
         print(f"[!] Aviso: Não foi possível gerar pacote KML: {e}")
 
-    # 7. Gerar Relatório Técnico Oficial (.docx e .pdf) para Subsídio Imediato à Decisão
+    # 8. Gerar Relatório Técnico Oficial (.docx e .pdf) para Subsídio Imediato à Decisão
     relatorio_path = None
     relatorio_pdf_path = None
     try:

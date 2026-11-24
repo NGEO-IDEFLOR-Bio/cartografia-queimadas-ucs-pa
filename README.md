@@ -28,8 +28,11 @@ O projeto unifica a arquitetura modular e desacoplada de `cartografia-alertas-de
   2. **Cor Natural (RGB: B4, B3, B2):** Visão limpa de relevo e vegetação.
   3. **Severidade do Fogo (Opções Escolhíveis):**
      - **dNBR Bi-temporal (Pré vs Pós — Padrão USGS/MTBS):** Avalia a perda real de biomassa contra o mosaico pré-fogo, imune a falsos positivos em campos naturais do Marajó e cerrado/savana.
-     - **MapBiomas Coleção 11:** Mascaramento fenológico inteligente com a Coleção 11 oficial de cobertura da terra (`projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3`).
-     - **NBR Clássico:** Índice espectral unitemporal calibrado.
+     - **MapBiomas C11 — Classificação por Cobertura:** combina a cicatriz de queima (dNBR bi-temporal) com a Coleção 11 oficial de cobertura da terra (`projects/mapbiomas-public/assets/brazil/lulc/collection11/mapbiomas_brazil_collection11_coverage_v3`), em classes categóricas. O limiar de queima varia por cobertura (floresta 0,10; pastagem 0,15; campo/savana 0,18), e a legenda usa **tons quentes apenas para queimada** e **tons frios/mudos para floresta, campo, savana e pastagem não queimados** — eliminando a confusão entre seca sazonal e fogo.
+     - **NBR Clássico:** Índice espectral unitemporal calibrado, com paleta revisada para separar visualmente cobertura não queimada de cicatriz.
+* **Zoom do Mapa Principal na Ocorrência:** o enquadramento é calculado a partir da bounding box dos focos do período (com margem de contexto e janela mínima), e não mais pelo limite integral da UC. Se não houver focos, o mapa volta ao enquadramento total da UC.
+* **Mapa de Calor no Contexto da UC:** acima de 250 focos, o mapa intermediário substitui os milhares de triângulos por uma densidade KDE, com foco recente (< 48h) ponderado acima dos pretéritos. Abaixo desse limiar, os símbolos individuais permanecem.
+* **Simbologia Adaptativa:** o tamanho e a opacidade dos triângulos do mapa principal são reduzidos automaticamente conforme o volume de focos (de 70/95 pt² para 12/20 pt² em cenários com mais de 10 mil focos), preservando a leitura da imagem orbital de severidade.
 * **Cobertura Orbital de 100% da Área Visível:** O cálculo da extensão do mosaico Sentinel-2 expande e ajusta o *bounding box* ao *aspect ratio* exato do quadro do mapa principal ($155 \times 124\text{ mm}$), garantindo que a imagem preencha todo o viewport sem lacunas ou bordas pretas.
 * **Pranchas em Alta Resolução (300 DPI):** Exportação direta em formato raster (PNG 300 DPI) para relatórios e vetorial (PDF) para anexação em processos administrativos (PAe/SEI).
 * **Geração Automática de Relatório Técnico Oficial (.docx):** Produção instantânea do documento Word oficial no padrão institucional do NGEO/IDEFLOR-Bio, integrando tabelas quantitativas de focos, sensores orbitais, fundamentação metodológica e subsídios táticos para pronta tomada de decisão ambiental e fiscalização.
@@ -84,8 +87,8 @@ flowchart LR
 
     subgraph LAYOUT["3. Motor Cartográfico A4 Paisagem (297 x 210 mm)"]
         direction TB
-        L_DET["Mapa Principal de Detalhe (155 x 124 mm)<br/>• Enquadramento total do alvo sem bordas vazias<br/>• Focos em triângulos bicolores com grade a 90°"]
-        L_INT["Mapa Intermediário (102 x 75 mm)<br/>• Contexto regional da UC e malha municipal"]
+        L_DET["Mapa Principal de Detalhe (155 x 124 mm)<br/>• Zoom na ocorrência (fallback: limite da UC)<br/>• Focos em triângulos bicolores com tamanho adaptativo"]
+        L_INT["Mapa Intermediário (102 x 75 mm)<br/>• Contexto regional da UC e malha municipal<br/>• Mapa de calor (KDE) acima de 250 focos"]
         L_MAC["Mapa Macro Estadual (102 x 75 mm)<br/>• Pará no contexto nacional com halo na UC"]
         L_TEC["Painéis Técnicos e Oficiais<br/>• Legenda oficial, Rosa dos Ventos, Escala gráfica<br/>• Logos NGEO, IDEFLOR-Bio e Brasão do Pará"]
     end
@@ -201,7 +204,7 @@ processar_e_exportar_todos_os_mapas(
 | **Focos Dias Anteriores** | `#FAFF39` | `#B35C15` | Triângulo `▲` (70 pt) | Acúmulo histórico de queimadas no período |
 | **Focos Dia Atual / Última Obs.** | `#DB1E2A` | `#801119` | Triângulo `▲` (95 pt) | Frentes ativas de fogo / emergência recente |
 | **Limite da UC** | Transparente | `#00FF66` / `#004D20` | Polígono contínuo | Limite homologado DGMUC/IDEFLOR-Bio |
-| **Severidade do Fogo (NBR)** | Gradiente Contínuo | `#2C3E50` | Paleta Calibrada | Risco foliar e intensidade térmica |
+| **Severidade do Fogo (MapBiomas C11)** | Classes categóricas | `#2C3E50` | 4 classes de queima + 4 de cobertura | Tons quentes = queimada; tons frios/mudos = floresta, campo, pastagem e outros usos não queimados |
 | **Corpos d'Água (NBR)** | `#1F618D` | `#1B4F72` | Máscara NDWI / SCL | Rios e lagos preservados |
 
 ---

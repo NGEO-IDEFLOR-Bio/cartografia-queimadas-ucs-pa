@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MultipleLocator
 import numpy as np
@@ -21,11 +22,18 @@ import pandas as pd
 import geopandas as gpd
 from PIL import Image
 
+try:
+    from scipy.ndimage import gaussian_filter
+except Exception:  # pragma: no cover - fallback quando scipy não está disponível
+    gaussian_filter = None
+
 from src.config import (
     PAGE_WIDTH_MM, PAGE_HEIGHT_MM, DPI_EXPORT,
     LAYOUT_ITEMS, mm_to_mpl_rect, calculate_visible_extent,
     FOCOS_ANTERIORES_FILL, FOCOS_ANTERIORES_STROKE, FOCOS_ANTERIORES_SIZE, FOCOS_ANTERIORES_LW,
     FOCOS_RECENTES_FILL, FOCOS_RECENTES_STROKE, FOCOS_RECENTES_SIZE, FOCOS_RECENTES_LW,
+    FOCOS_ESCALA,
+    HEATMAP_MIN_FOCOS, HEATMAP_CMAP, HEATMAP_PESO_PRETERITO,
     FILE_UCS_ESTADUAIS, FILE_ESTADO_PA, FILE_MUNICIPIOS,
     FILE_BRASIL_UFS, FILE_AMERICA_SUL,
     FILE_BRASAO_PARA, FILE_LOGO_IDEFLOR, FILE_LOGO_NGEO,
@@ -72,6 +80,112 @@ def format_coord_dms(val: float, is_lat: bool = True) -> str:
         d += 1
         m = 0
     return f"{d:02d}°{m:02d}'{hem}"
+
+
+def resolve_focus_style(n_total: int) -> Tuple[float, float, float, float, float, float]:
+    """Escalona os triângulos conforme o volume de focos para não saturar o mapa."""
+    for limite, s_ant, s_rec, lw_ant, lw_rec, a_ant, a_rec in FOCOS_ESCALA:
+        if n_total <= limite:
+            return s_ant, s_rec, lw_ant, lw_rec, a_ant, a_rec
+    return (
+        FOCOS_ANTERIORES_SIZE, FOCOS_RECENTES_SIZE,
+        FOCOS_ANTERIORES_LW, FOCOS_RECENTES_LW, 1.0, 1.0
+    )
+
+
+def plot_density_heatmap(
+    ax,
+    gdf_anteriores: gpd.GeoDataFrame,
+    gdf_recentes: gpd.GeoDataFrame,
+    extent: Tuple[float, float, float, float],
+    nx: int = 220
+):
+    """
+    Plota a densidade dos focos (mapa de calor) no mapa intermediário.
+
+    Os focos recentes (< 48h) recebem peso integral e os pretéritos peso menor,
+    de modo que os núcleos atuais de queima apareçam como os mais quentes.
+    Retorna o colormap usado (para a legenda) ou None se não houver focos.
+    """
+    xmin, ymin, xmax, ymax = extent
+    xs, ys, ws = [], [], []
+
+    for gdf, peso in ((gdf_anteriores, HEATMAP_PESO_PRETERITO), (gdf_recentes, 1.0)):
+        if gdf is None or gdf.empty:
+            continue
+        xs.append(gdf.geometry.x.to_numpy())
+        ys.append(gdf.geometry.y.to_numpy())
+        ws.append(np.full(len(gdf), peso, dtype=float))
+
+    if not xs:
+        return None
+
+    x = np.concatenate(xs)
+    y = np.concatenate(ys)
+    w = np.concatenate(ws)
+
+    ny = max(int(nx * (ymax - ymin) / max(xmax - xmin, 1e-9)), 40)
+    hist, _, _ = np.histogram2d(
+        x, y, bins=(nx, ny),
+        range=((xmin, xmax), (ymin, ymax)),
+        weights=w
+    )
+    if hist.max() <= 0:
+        return None
+
+    if gaussian_filter is not None:
+        # Suavização proporcional ao tamanho da janela: gera manchas contínuas
+        # em vez de pontos individuais, sem "apagar" focos isolados relevantes.
+        sigma = max(min(nx, ny) / 80.0, 1.0)
+        hist = gaussian_filter(hist, sigma=sigma, mode="constant")
+
+    vmax = float(np.percentile(hist[hist > 0], 99.0))
+    vmax = max(vmax, hist.max() * 0.25, 1e-9)
+
+    cmap = LinearSegmentedColormap.from_list("densidade_focos", HEATMAP_CMAP)
+    cmap.set_under((1, 1, 1, 0.0))
+
+    ax.imshow(
+        (hist / vmax).T,
+        extent=(xmin, xmax, ymin, ymax),
+        origin="lower",
+        cmap=cmap,
+        vmin=0.035,
+        vmax=1.0,
+        alpha=0.88,
+        interpolation="bilinear",
+        aspect="auto",
+        zorder=10
+    )
+    # Reaplica os limites: imshow com aspect='auto' pode reescalar o eixo
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    return cmap
+
+
+def draw_heatmap_legend(ax, cmap, n_total: int):
+    """Legenda compacta de gradiente para o mapa de calor, dentro do mapa intermediário."""
+    inset = ax.inset_axes([0.035, 0.035, 0.34, 0.105], transform=ax.transAxes, zorder=45)
+    inset.set_facecolor("white")
+    inset.patch.set_alpha(0.90)
+    for spine in inset.spines.values():
+        spine.set_edgecolor("#2C3E50")
+        spine.set_linewidth(0.5)
+
+    inset.imshow(
+        np.linspace(0, 1, 256).reshape(1, -1),
+        extent=(0, 1, 0, 1), origin="lower",
+        cmap=cmap, aspect="auto", vmin=0, vmax=1
+    )
+    inset.set_xticks([])
+    inset.set_yticks([])
+    inset.text(0.02, 1.18, f"Densidade de focos (n = {n_total:,})".replace(",", "."),
+               transform=inset.transAxes, ha="left", va="bottom",
+               fontsize=5.0, fontweight="bold", color="#1B2631")
+    inset.text(0.0, -0.08, "Baixa", transform=inset.transAxes, ha="left", va="top",
+               fontsize=4.6, color="#2C3E50")
+    inset.text(1.0, -0.08, "Alta", transform=inset.transAxes, ha="right", va="top",
+               fontsize=4.6, color="#2C3E50")
 
 
 def draw_north_arrow(ax, center_x: float = 0.5, center_y: float = 0.72, size: float = 0.22):
@@ -150,6 +264,8 @@ def render_mapa_prancha(
     tipo_basemap: str = "Falsa Cor (Realce Queimadas)",
     periodo_str: str = "Últimos 30 dias",
     metricas: Optional[Dict[str, Any]] = None,
+    legenda_severidade: Optional[List[Tuple[str, str]]] = None,
+    legenda_titulo: Optional[str] = None,
     output_path: Optional[Path] = None
 ) -> plt.Figure:
     """
@@ -243,19 +359,23 @@ def render_mapa_prancha(
         gdf_uc.boundary.plot(ax=ax_main, edgecolor=cor_uc_main, linewidth=2.0, zorder=20)
         gdf_uc.boundary.plot(ax=ax_main, edgecolor=cor_uc_halo, linewidth=3.2, alpha=0.7, zorder=19)
         
-    # Focos de Queimadas (Triângulos)
+    # Focos de Queimadas (Triângulos com tamanho adaptativo ao volume de focos)
+    n_focos_total = len(gdf_anteriores) + len(gdf_recentes)
+    (foco_size_ant, foco_size_rec, foco_lw_ant,
+     foco_lw_rec, foco_alpha_ant, foco_alpha_rec) = resolve_focus_style(n_focos_total)
+
     if not gdf_anteriores.empty:
         gdf_anteriores.plot(
             ax=ax_main, marker="^",
             color=FOCOS_ANTERIORES_FILL, edgecolor=FOCOS_ANTERIORES_STROKE,
-            linewidth=FOCOS_ANTERIORES_LW, markersize=FOCOS_ANTERIORES_SIZE,
+            linewidth=foco_lw_ant, markersize=foco_size_ant, alpha=foco_alpha_ant,
             zorder=30
         )
     if not gdf_recentes.empty:
         gdf_recentes.plot(
             ax=ax_main, marker="^",
             color=FOCOS_RECENTES_FILL, edgecolor=FOCOS_RECENTES_STROKE,
-            linewidth=FOCOS_RECENTES_LW, markersize=FOCOS_RECENTES_SIZE,
+            linewidth=foco_lw_rec, markersize=foco_size_rec, alpha=foco_alpha_rec,
             zorder=35
         )
         
@@ -277,7 +397,9 @@ def render_mapa_prancha(
     elif tem_recente and not gdf_recentes.empty:
         ax_main.text(
             0.02, 0.97,
-            f"STATUS: ALERTA DE FOCOS ATIVOS RECENTES (< 48H)\nDetecção recente em {data_rec} – {len(gdf_recentes)} foco(s) com alta prioridade operacional",
+            f"STATUS: ALERTA DE FOCOS ATIVOS RECENTES (< 48H)\n"
+            f"Detecção recente em {data_rec} – {len(gdf_recentes)} "
+            f"{'foco' if len(gdf_recentes) == 1 else 'focos'} com alta prioridade operacional",
             transform=ax_main.transAxes, ha="left", va="top",
             fontsize=6.2, fontweight="bold", color="#FFFFFF",
             bbox=dict(boxstyle="square,pad=0.35", facecolor="#922B21", edgecolor="#641E16", alpha=0.90, linewidth=0.7),
@@ -305,7 +427,12 @@ def render_mapa_prancha(
     is_severidade = any(k in tipo_l for k in ["nbr", "dnbr", "severidade", "mapbiomas"])
     
     if is_severidade:
-        if "dnbr" in tipo_l or "bi-temporal" in tipo_l:
+        if legenda_severidade:
+            # Legenda categórica fornecida pelo pipeline (ex.: dNBR + MapBiomas C11)
+            titulo_leg_sev = legenda_titulo or "Severidade e Cobertura (MapBiomas C11)"
+            classes_sev = list(legenda_severidade)
+            classes_sev.append(("#1F618D", "Corpos d'Água (Rios / Lagos)"))
+        elif "dnbr" in tipo_l or "bi-temporal" in tipo_l:
             titulo_leg_sev = "Severidade do Fogo (dNBR)"
             classes_sev = [
                 ("#7F0000", "Alta Severidade (dNBR > 0.44)"),
@@ -315,52 +442,46 @@ def render_mapa_prancha(
                 ("#1A9641", "Rebrota Vegetal (< -0.10)"),
                 ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
             ]
-        elif "mapbiomas" in tipo_l:
-            titulo_leg_sev = "Severidade (MapBiomas C11)"
-            classes_sev = [
-                ("#7F0000", "Queimada Severa (< -0.20)"),
-                ("#D9534F", "Queimada Moderada (Florestas)"),
-                ("#FAD7A0", "Campos do Marajó / Savana"),
-                ("#27AE60", "Floresta Preservada (> 0.38)"),
-                ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
-            ]
         else:
             titulo_leg_sev = "Severidade do Fogo (NBR)"
             classes_sev = [
-                ("#7F0000", "Queimada Severa (< -0.20)"),
-                ("#D9534F", "Queimada Moderada (-0.20 a -0.08)"),
-                ("#FAD7A0", "Campos / Cerrado / Solo (-0.08 a 0.18)"),
-                ("#82E0AA", "Veg. Herbácea / Transição (0.18 a 0.38)"),
-                ("#1E8449", "Floresta Preservada (> 0.38)"),
+                ("#67000D", "Queimada Severa (NBR < -0,18)"),
+                ("#A50F15", "Queimada Alta (-0,18 a -0,05)"),
+                ("#EF6548", "Queimada Moderada (-0,05 a 0,08)"),
+                ("#FDBB84", "Queima Leve (0,08 a 0,20)"),
+                ("#9E9D24", "Campo / Savana não queimado (0,20 a 0,32)"),
+                ("#7CB342", "Pastagem / Herbácea (0,32 a 0,45)"),
+                ("#2E7D32", "Floresta preservada (> 0,45)"),
                 ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
             ]
 
-        h_box = 0.32 if len(classes_sev) >= 6 else 0.27
+        row_h = 0.036
+        h_box = 0.066 + len(classes_sev) * row_h
         rec_nbr_leg = mpatches.FancyBboxPatch(
             (0.665, 0.98 - h_box), 0.320, h_box,
             boxstyle="square,pad=0.01",
             transform=ax_main.transAxes,
             facecolor="#FFFFFF", edgecolor="#2C3E50",
-            linewidth=0.8, alpha=0.92, zorder=50
+            linewidth=0.8, alpha=0.94, zorder=50
         )
         ax_main.add_patch(rec_nbr_leg)
         
-        ax_main.text(0.825, 0.962, titulo_leg_sev,
+        ax_main.text(0.825, 0.966, titulo_leg_sev,
                      transform=ax_main.transAxes, ha="center", va="top",
-                     fontsize=6.8, fontweight="bold", color="#1B2631", zorder=51)
+                     fontsize=6.1, fontweight="bold", color="#1B2631", zorder=51)
                      
-        y_swatch_start = 0.920
+        y_swatch_start = 0.922
         for i, (cor, label_cls) in enumerate(classes_sev):
-            y_cls = y_swatch_start - (i * 0.038)
+            y_cls = y_swatch_start - (i * row_h)
             patch_cls = mpatches.Rectangle(
-                (0.680, y_cls - 0.012), 0.024, 0.024,
+                (0.680, y_cls - 0.0115), 0.023, 0.023,
                 transform=ax_main.transAxes,
                 facecolor=cor, edgecolor="#333333", linewidth=0.5, zorder=51
             )
             ax_main.add_patch(patch_cls)
-            ax_main.text(0.718, y_cls, label_cls,
+            ax_main.text(0.717, y_cls, label_cls,
                          transform=ax_main.transAxes, ha="left", va="center",
-                         fontsize=5.3, fontweight="semibold", color="#2C3E50", zorder=51)
+                         fontsize=5.15, fontweight="semibold", color="#2C3E50", zorder=51)
 
     # Moldura no topo (zorder=100)
     for spine in ax_main.spines.values():
@@ -425,12 +546,45 @@ def render_mapa_prancha(
             bbox=dict(boxstyle="square,pad=0.2", fc="#FFFFFF", ec="none", alpha=0.75)
         )
         
-        # Focos no mapa intermediário (simbologia padrão conforme legenda)
-        if not gdf_anteriores.empty:
-            gdf_anteriores.plot(ax=ax_interm, marker="^", color=FOCOS_ANTERIORES_FILL, edgecolor=FOCOS_ANTERIORES_STROKE, markersize=25, linewidth=0.8, zorder=8)
-        if not gdf_recentes.empty:
-            gdf_recentes.plot(ax=ax_interm, marker="^", color=FOCOS_RECENTES_FILL, edgecolor=FOCOS_RECENTES_STROKE, markersize=35, linewidth=1.0, zorder=9)
-            
+        # Focos no mapa intermediário: mapa de calor quando o volume é alto,
+        # símbolos individuais quando há poucos focos (evita saturação visual).
+        if n_focos_total >= HEATMAP_MIN_FOCOS:
+            heat_cmap = plot_density_heatmap(
+                ax_interm, gdf_anteriores, gdf_recentes,
+                (xmin_i, ymin_i, xmax_i, ymax_i)
+            )
+            # Redesenha o limite da UC sobre o calor para manter a leitura territorial
+            gdf_uc.boundary.plot(ax=ax_interm, edgecolor="#1E8449", linewidth=1.2, zorder=14)
+            if heat_cmap is not None:
+                draw_heatmap_legend(ax_interm, heat_cmap, n_focos_total)
+        else:
+            size_ant = 18 if n_focos_total > 100 else 26
+            size_rec = 28 if n_focos_total > 100 else 36
+            if not gdf_anteriores.empty:
+                gdf_anteriores.plot(ax=ax_interm, marker="^", color=FOCOS_ANTERIORES_FILL, edgecolor=FOCOS_ANTERIORES_STROKE, markersize=size_ant, linewidth=0.8, zorder=8)
+            if not gdf_recentes.empty:
+                gdf_recentes.plot(ax=ax_interm, marker="^", color=FOCOS_RECENTES_FILL, edgecolor=FOCOS_RECENTES_STROKE, markersize=size_rec, linewidth=1.0, zorder=9)
+
+        # Retângulo da área de detalhe do mapa principal (zoom na ocorrência).
+        # Só é desenhado quando o zoom é realmente parcial; se a ocorrência já
+        # cobre praticamente toda a UC, o retângulo apenas poluiria o mapa.
+        dx = basemap_extent[2] - basemap_extent[0]
+        dy = basemap_extent[3] - basemap_extent[1]
+        area_frac = (dx * dy) / max((xmax_i - xmin_i) * (ymax_i - ymin_i), 1e-9)
+        if area_frac < 0.55:
+            ax_interm.add_patch(mpatches.Rectangle(
+                (basemap_extent[0], basemap_extent[1]), dx, dy,
+                fill=False, edgecolor="#111111", linewidth=1.0,
+                linestyle=(0, (3, 2)), zorder=18
+            ))
+            if dx < (xmax_i - xmin_i) * 0.62 and dy < (ymax_i - ymin_i) * 0.62:
+                ax_interm.text(
+                    basemap_extent[0] + dx / 2.0, basemap_extent[1] + dy,
+                    "Área de detalhe", ha="center", va="bottom",
+                    fontsize=4.6, fontstyle="italic", color="#111111", zorder=19,
+                    bbox=dict(boxstyle="square,pad=0.12", fc="#FFFFFF", ec="none", alpha=0.80)
+                )
+
     # Trava a geometria do eixo intermediário para dimensões físicas fixas (102 x 75 mm), sem estreitar pela UC
     ax_interm.set_aspect('equal', adjustable='datalim')
     
