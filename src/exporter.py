@@ -200,8 +200,8 @@ def processar_e_exportar_todos_os_mapas(
     metodo_severidade : str
         'DNBR': Análise bi-temporal contínua (dNBR = NBR_pré - NBR_pós).
         'MAPBIOMAS' (recomendado): classificação categórica da cicatriz de queima
-        (dNBR) por cobertura da terra (MapBiomas C11), separando pastagem,
-        savana e campo natural não queimados de fogo real.
+        (dNBR) por cobertura da terra (MapBiomas C11), contextualizando
+        pastagem, savana e campo natural na classificação de fogo.
         'NBR': NBR unitemporal clássico.
     focos_source : Union[str, Path, ee.FeatureCollection]
         'BDQUEIMADAS' (padrão): Baixa automaticamente os focos oficiais do INPE/BDQueimadas.

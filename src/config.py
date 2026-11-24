@@ -61,16 +61,16 @@ MAPBIOMAS_YEAR_DEFAULT = 2024
 
 # Classificação Integrada de Severidade + Cobertura da Terra (MapBiomas C11)
 # A legenda separa explicitamente o que é CICATRIZ DE QUEIMA (tons quentes/saturados)
-# do que é COBERTURA NATURAL NÃO QUEIMADA (tons frios/mudos: verde, oliva e cinza).
+# do que é COBERTURA DA TERRA (tons frios/mudos: verde, oliva e cinza).
 # Classes 1..8 (a água é aplicada separadamente pela máscara NDWI em azul institucional).
 SEVERIDADE_CLASSES = [
     ("#67000D", "Queimada Severa (dNBR > 0,66)"),
     ("#A50F15", "Queimada Alta (0,44 a 0,66)"),
     ("#EF6548", "Queimada Moderada (0,27 a 0,44)"),
     ("#FDBB84", "Queimada Leve (limiar local a 0,27)"),
-    ("#1B5E20", "Floresta não queimada"),
-    ("#9E9D24", "Campo / Savana não queimado"),
-    ("#7CB342", "Pastagem / Mosaico não queimado"),
+    ("#1B5E20", "Floresta"),
+    ("#9E9D24", "Campo / Savana"),
+    ("#7CB342", "Pastagem / Mosaico"),
     ("#BDBDBD", "Outros usos / Solo exposto"),
 ]
 SEVERIDADE_PALETTE = [cor for cor, _ in SEVERIDADE_CLASSES]
@@ -128,7 +128,7 @@ VIS_CONFIGS = {
         "max": 0.66,
         "palette": [
             "#1A9641",  # <= -0.10: Rebrota vegetal / Aumento de vigor
-            "#A6D96A",  #  0.00: Vegetação não queimada / Estável (Campos/Florestas)
+            "#A6D96A",  #  0.00: Vegetação estável / sem cicatriz (Campos/Florestas)
             "#FEE08B",  #  0.10: Severidade baixa / Queima leve
             "#FDAE61",  #  0.27: Severidade moderada-baixa
             "#D73027",  #  0.44: Severidade moderada-alta
@@ -149,14 +149,14 @@ VIS_CONFIGS = {
         "subtitulo": "Normalized Burn Ratio (B8 - B12) / (B8 + B12)",
         "min": -0.30,
         "max": 0.70,
-        # Tons frios/mudos para cobertura não queimada; tons quentes apenas para cicatriz.
+        # Tons frios/mudos para cobertura da terra; tons quentes apenas para cicatriz.
         "palette": [
             "#67000D",  # -0.30: Queimada Severa (cinzas profundas / solo calcinado)
             "#A50F15",  # -0.15: Queimada Alta / Cicatriz recente
             "#EF6548",  # -0.08: Queimada Moderada
             "#FDBB84",  #  0.02: Queima leve
-            "#9E9D24",  #  0.15: Campos Naturais / Savanas / Cerrado seco sazonal (NÃO queimado)
-            "#7CB342",  #  0.28: Pastagem / Vegetação herbácea (NÃO queimada)
+            "#9E9D24",  #  0.15: Campos Naturais / Savanas / Cerrado seco sazonal
+            "#7CB342",  #  0.28: Pastagem / Vegetação herbácea
             "#2E7D32",  #  0.45: Floresta conservada
             "#1B5E20",  #  0.60: Floresta densa
             "#0B3D0B",  #  0.70: Floresta tropical densa

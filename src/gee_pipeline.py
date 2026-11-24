@@ -142,7 +142,7 @@ def classify_severity_by_landcover(dnbr: ee.Image, region: ee.Geometry) -> ee.Im
     - 1..4: cicatriz de queima (severa, alta, moderada, leve). O limiar mínimo
       de dNBR varia por cobertura: floresta 0,10; pastagem 0,15; campo/savana
       0,18. Assim, a seca sazonal do Marajó não é pintada como fogo.
-    - 5..8: cobertura NÃO queimada (floresta, campo/savana, pastagem/mosaico,
+    - 5..8: cobertura da terra (floresta, campo/savana, pastagem/mosaico,
       outros usos), em tons frios/mudos.
     """
     asset_img = ee.Image(MAPBIOMAS_C11_ASSET)

@@ -413,7 +413,7 @@ def render_mapa_prancha(
                 ("#7F0000", "Alta Severidade (dNBR > 0.44)"),
                 ("#D73027", "Mod.-Alta Severidade (0.27 a 0.44)"),
                 ("#FDAE61", "Baixa Severidade (0.10 a 0.27)"),
-                ("#A6D96A", "Não Queimado / Estável (-0.10 a 0.10)"),
+                ("#A6D96A", "Estável / Sem Cicatriz (-0.10 a 0.10)"),
                 ("#1A9641", "Rebrota Vegetal (< -0.10)"),
                 ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
             ]
@@ -424,7 +424,7 @@ def render_mapa_prancha(
                 ("#A50F15", "Queimada Alta (-0,18 a -0,05)"),
                 ("#EF6548", "Queimada Moderada (-0,05 a 0,08)"),
                 ("#FDBB84", "Queima Leve (0,08 a 0,20)"),
-                ("#9E9D24", "Campo / Savana não queimado (0,20 a 0,32)"),
+                ("#9E9D24", "Campo / Savana (0,20 a 0,32)"),
                 ("#7CB342", "Pastagem / Herbácea (0,32 a 0,45)"),
                 ("#2E7D32", "Floresta preservada (> 0,45)"),
                 ("#1F618D", "Corpos d'Água (Rios / Lagos)"),
