@@ -163,31 +163,6 @@ def plot_density_heatmap(
     return cmap
 
 
-def draw_heatmap_legend(ax, cmap, n_total: int):
-    """Legenda compacta de gradiente para o mapa de calor, dentro do mapa intermediário."""
-    inset = ax.inset_axes([0.035, 0.035, 0.34, 0.105], transform=ax.transAxes, zorder=45)
-    inset.set_facecolor("white")
-    inset.patch.set_alpha(0.90)
-    for spine in inset.spines.values():
-        spine.set_edgecolor("#2C3E50")
-        spine.set_linewidth(0.5)
-
-    inset.imshow(
-        np.linspace(0, 1, 256).reshape(1, -1),
-        extent=(0, 1, 0, 1), origin="lower",
-        cmap=cmap, aspect="auto", vmin=0, vmax=1
-    )
-    inset.set_xticks([])
-    inset.set_yticks([])
-    inset.text(0.02, 1.18, f"Densidade de focos (n = {n_total:,})".replace(",", "."),
-               transform=inset.transAxes, ha="left", va="bottom",
-               fontsize=5.0, fontweight="bold", color="#1B2631")
-    inset.text(0.0, -0.08, "Baixa", transform=inset.transAxes, ha="left", va="top",
-               fontsize=4.6, color="#2C3E50")
-    inset.text(1.0, -0.08, "Alta", transform=inset.transAxes, ha="right", va="top",
-               fontsize=4.6, color="#2C3E50")
-
-
 def draw_north_arrow(ax, center_x: float = 0.5, center_y: float = 0.72, size: float = 0.22):
     """Desenha a rosa dos ventos clássica preta e branca com o N estilizado."""
     w = size * 0.42
@@ -549,14 +524,12 @@ def render_mapa_prancha(
         # Focos no mapa intermediário: mapa de calor quando o volume é alto,
         # símbolos individuais quando há poucos focos (evita saturação visual).
         if n_focos_total >= HEATMAP_MIN_FOCOS:
-            heat_cmap = plot_density_heatmap(
+            plot_density_heatmap(
                 ax_interm, gdf_anteriores, gdf_recentes,
                 (xmin_i, ymin_i, xmax_i, ymax_i)
             )
             # Redesenha o limite da UC sobre o calor para manter a leitura territorial
             gdf_uc.boundary.plot(ax=ax_interm, edgecolor="#1E8449", linewidth=1.2, zorder=14)
-            if heat_cmap is not None:
-                draw_heatmap_legend(ax_interm, heat_cmap, n_focos_total)
         else:
             size_ant = 18 if n_focos_total > 100 else 26
             size_rec = 28 if n_focos_total > 100 else 36
